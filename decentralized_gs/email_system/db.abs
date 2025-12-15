@@ -1,0 +1,54 @@
+module DB;
+
+export *;
+
+import * from Prometheus;
+import * from Param;
+
+interface DBInterface {
+  Unit insertMessageInformation (String messageId, Int attachmentsNumber);
+  Int insertResult(String messageId, Rat received_at);
+  Unit removeMessage(String messageId);
+}
+
+class DB(PrometheusInterface prometheus) implements DBInterface {
+  Map<String,Int> messageInfo = map[];
+  Metric loss;
+  Metric completed;
+  Metric latency;
+  {
+    completed = new local DiscreteMetric(Pair("comp",global_service_name()));
+    latency = new local DiscreteMetric(Pair("latency",global_service_name()));
+    loss = new local DiscreteMetric(Pair("rej",global_service_name()));
+    prometheus!register(list[loss,completed,latency]);
+  }
+
+
+  Unit removeMessage(String messageId) {
+    if(isJust(lookup(messageInfo,messageId))) {
+      messageInfo = removeKey(messageInfo, messageId);
+      loss!push(1);
+    }
+  }
+
+  Unit insertMessageInformation (String messageId, Int attachmentsNumber){
+		messageInfo = put(messageInfo, messageId, attachmentsNumber);
+  }
+
+  Int insertResult(String messageId, Rat lat){
+    Int numberOfActivityWaiting = -1;
+    Maybe<Int> maybe = lookup(messageInfo, messageId);
+    if(isJust(maybe)){
+      numberOfActivityWaiting = fromJust(maybe) - 1;
+      if (numberOfActivityWaiting == 0) {
+        completed!push(1);
+        latency!push(lat);
+        messageInfo = removeKey(messageInfo, messageId);
+      }
+      else {
+		    messageInfo = put(messageInfo, messageId, numberOfActivityWaiting);
+      }
+    }
+    return numberOfActivityWaiting;
+  }
+}

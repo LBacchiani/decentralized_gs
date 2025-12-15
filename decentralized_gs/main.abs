@@ -1,0 +1,15 @@
+module SimulationExecutor;
+
+export *;
+
+import * from Simulation;
+import * from Param;
+
+
+{
+
+
+    ISimulation simulation = new Simulation();
+
+    simulation.start();    
+}

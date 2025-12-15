@@ -1,0 +1,292 @@
+module InvariantsDeployer;
+export *;
+import * from ABS.DC;
+import * from Architecture;
+import * from DB;
+import * from Prometheus;
+
+interface InvariantsDeployer{
+	List<HeaderAnalyser_LoadBalancerInterface> getHeaderAnalyser_LoadBalancerInterface();
+	List<MessageReceiver_LoadBalancerInterface> getMessageReceiver_LoadBalancerInterface();
+	List<AttachmentsManager_LoadBalancerInterface> getAttachmentsManager_LoadBalancerInterface();
+	List<ImageRecognizer_LoadBalancerInterface> getImageRecognizer_LoadBalancerInterface();
+	List<MessageAnalyser_LoadBalancerInterface> getMessageAnalyser_LoadBalancerInterface();
+	List<MessageParser_LoadBalancerInterface> getMessageParser_LoadBalancerInterface();
+	List<VirusScanner_LoadBalancerInterface> getVirusScanner_LoadBalancerInterface();
+	List<NSFWDetector_LoadBalancerInterface> getNSFWDetector_LoadBalancerInterface();
+	List<SentimentAnalyser_LoadBalancerInterface> getSentimentAnalyser_LoadBalancerInterface();
+	List<TextAnalyser_LoadBalancerInterface> getTextAnalyser_LoadBalancerInterface();
+	List<ImageAnalyser_LoadBalancerInterface> getImageAnalyser_LoadBalancerInterface();
+	List<LinkAnalyser_LoadBalancerInterface> getLinkAnalyser_LoadBalancerInterface();
+	List<DeploymentComponent> getDeploymentComponent();
+	Unit deploy();
+	Unit undeploy();
+}
+
+class InvariantsDeployer(CloudProvider cloudProvider, PrometheusInterface prometheus, DBInterface dbObj) implements InvariantsDeployer{
+
+	List<List<HeaderAnalyser_LoadBalancerInterface>> ls_ls_HeaderAnalyser_LoadBalancerInterface = Nil;
+	List<HeaderAnalyser_LoadBalancerInterface> ls_HeaderAnalyser_LoadBalancerInterface = Nil;
+	List<List<MessageReceiver_LoadBalancerInterface>> ls_ls_MessageReceiver_LoadBalancerInterface = Nil;
+	List<MessageReceiver_LoadBalancerInterface> ls_MessageReceiver_LoadBalancerInterface = Nil;
+	List<List<AttachmentsManager_LoadBalancerInterface>> ls_ls_AttachmentsManager_LoadBalancerInterface = Nil;
+	List<AttachmentsManager_LoadBalancerInterface> ls_AttachmentsManager_LoadBalancerInterface = Nil;
+	List<List<ImageRecognizer_LoadBalancerInterface>> ls_ls_ImageRecognizer_LoadBalancerInterface = Nil;
+	List<ImageRecognizer_LoadBalancerInterface> ls_ImageRecognizer_LoadBalancerInterface = Nil;
+	List<List<MessageAnalyser_LoadBalancerInterface>> ls_ls_MessageAnalyser_LoadBalancerInterface = Nil;
+	List<MessageAnalyser_LoadBalancerInterface> ls_MessageAnalyser_LoadBalancerInterface = Nil;
+	List<List<MessageParser_LoadBalancerInterface>> ls_ls_MessageParser_LoadBalancerInterface = Nil;
+	List<MessageParser_LoadBalancerInterface> ls_MessageParser_LoadBalancerInterface = Nil;
+	List<List<VirusScanner_LoadBalancerInterface>> ls_ls_VirusScanner_LoadBalancerInterface = Nil;
+	List<VirusScanner_LoadBalancerInterface> ls_VirusScanner_LoadBalancerInterface = Nil;
+	List<List<NSFWDetector_LoadBalancerInterface>> ls_ls_NSFWDetector_LoadBalancerInterface = Nil;
+	List<NSFWDetector_LoadBalancerInterface> ls_NSFWDetector_LoadBalancerInterface = Nil;
+	List<List<SentimentAnalyser_LoadBalancerInterface>> ls_ls_SentimentAnalyser_LoadBalancerInterface = Nil;
+	List<SentimentAnalyser_LoadBalancerInterface> ls_SentimentAnalyser_LoadBalancerInterface = Nil;
+	List<List<TextAnalyser_LoadBalancerInterface>> ls_ls_TextAnalyser_LoadBalancerInterface = Nil;
+	List<TextAnalyser_LoadBalancerInterface> ls_TextAnalyser_LoadBalancerInterface = Nil;
+	List<List<ImageAnalyser_LoadBalancerInterface>> ls_ls_ImageAnalyser_LoadBalancerInterface = Nil;
+	List<ImageAnalyser_LoadBalancerInterface> ls_ImageAnalyser_LoadBalancerInterface = Nil;
+	List<List<LinkAnalyser_LoadBalancerInterface>> ls_ls_LinkAnalyser_LoadBalancerInterface = Nil;
+	List<LinkAnalyser_LoadBalancerInterface> ls_LinkAnalyser_LoadBalancerInterface = Nil;
+	List<List<DeploymentComponent>> ls_ls_DeploymentComponent = Nil;
+	List<DeploymentComponent> ls_DeploymentComponent = Nil;
+	Rat waiting_time = 1/10;
+	{
+		cloudProvider.addInstanceDescription(Pair("c4_4xlarge",
+			map[Pair(CostPerInterval,796)
+			,Pair(PaymentInterval,1)
+			,Pair(Bandwidth,2000)
+			,Pair(Memory,3000)
+			,Pair(Cores,16)
+			,Pair(Speed,80)
+			]));
+		cloudProvider.addInstanceDescription(Pair("c4_xlarge",
+			map[Pair(CostPerInterval,199)
+			,Pair(PaymentInterval,1)
+			,Pair(Bandwidth,750)
+			,Pair(Memory,750)
+			,Pair(Cores,4)
+			,Pair(Speed,20)
+			]));
+		cloudProvider.addInstanceDescription(Pair("c4_large",
+			map[Pair(CostPerInterval,100)
+			,Pair(PaymentInterval,1)
+			,Pair(Bandwidth,500)
+			,Pair(Memory,375)
+			,Pair(Cores,2)
+			,Pair(Speed,10)
+			]));
+		cloudProvider.addInstanceDescription(Pair("c4_2xlarge",
+			map[Pair(CostPerInterval,398)
+			,Pair(PaymentInterval,1)
+			,Pair(Bandwidth,1000)
+			,Pair(Memory,1500)
+			,Pair(Cores,8)
+			,Pair(Speed,40)
+			]));
+	}
+
+	List<HeaderAnalyser_LoadBalancerInterface> getHeaderAnalyser_LoadBalancerInterface() { return ls_HeaderAnalyser_LoadBalancerInterface; }
+	List<MessageReceiver_LoadBalancerInterface> getMessageReceiver_LoadBalancerInterface() { return ls_MessageReceiver_LoadBalancerInterface; }
+	List<AttachmentsManager_LoadBalancerInterface> getAttachmentsManager_LoadBalancerInterface() { return ls_AttachmentsManager_LoadBalancerInterface; }
+	List<ImageRecognizer_LoadBalancerInterface> getImageRecognizer_LoadBalancerInterface() { return ls_ImageRecognizer_LoadBalancerInterface; }
+	List<MessageAnalyser_LoadBalancerInterface> getMessageAnalyser_LoadBalancerInterface() { return ls_MessageAnalyser_LoadBalancerInterface; }
+	List<MessageParser_LoadBalancerInterface> getMessageParser_LoadBalancerInterface() { return ls_MessageParser_LoadBalancerInterface; }
+	List<VirusScanner_LoadBalancerInterface> getVirusScanner_LoadBalancerInterface() { return ls_VirusScanner_LoadBalancerInterface; }
+	List<NSFWDetector_LoadBalancerInterface> getNSFWDetector_LoadBalancerInterface() { return ls_NSFWDetector_LoadBalancerInterface; }
+	List<SentimentAnalyser_LoadBalancerInterface> getSentimentAnalyser_LoadBalancerInterface() { return ls_SentimentAnalyser_LoadBalancerInterface; }
+	List<TextAnalyser_LoadBalancerInterface> getTextAnalyser_LoadBalancerInterface() { return ls_TextAnalyser_LoadBalancerInterface; }
+	List<ImageAnalyser_LoadBalancerInterface> getImageAnalyser_LoadBalancerInterface() { return ls_ImageAnalyser_LoadBalancerInterface; }
+	List<LinkAnalyser_LoadBalancerInterface> getLinkAnalyser_LoadBalancerInterface() { return ls_LinkAnalyser_LoadBalancerInterface; }
+	List<DeploymentComponent> getDeploymentComponent() { return ls_DeploymentComponent; }
+
+	Unit deploy() {
+		ls_ls_HeaderAnalyser_LoadBalancerInterface = Cons(ls_HeaderAnalyser_LoadBalancerInterface,ls_ls_HeaderAnalyser_LoadBalancerInterface);
+		ls_HeaderAnalyser_LoadBalancerInterface = Nil;
+		ls_ls_MessageReceiver_LoadBalancerInterface = Cons(ls_MessageReceiver_LoadBalancerInterface,ls_ls_MessageReceiver_LoadBalancerInterface);
+		ls_MessageReceiver_LoadBalancerInterface = Nil;
+		ls_ls_AttachmentsManager_LoadBalancerInterface = Cons(ls_AttachmentsManager_LoadBalancerInterface,ls_ls_AttachmentsManager_LoadBalancerInterface);
+		ls_AttachmentsManager_LoadBalancerInterface = Nil;
+		ls_ls_ImageRecognizer_LoadBalancerInterface = Cons(ls_ImageRecognizer_LoadBalancerInterface,ls_ls_ImageRecognizer_LoadBalancerInterface);
+		ls_ImageRecognizer_LoadBalancerInterface = Nil;
+		ls_ls_MessageAnalyser_LoadBalancerInterface = Cons(ls_MessageAnalyser_LoadBalancerInterface,ls_ls_MessageAnalyser_LoadBalancerInterface);
+		ls_MessageAnalyser_LoadBalancerInterface = Nil;
+		ls_ls_MessageParser_LoadBalancerInterface = Cons(ls_MessageParser_LoadBalancerInterface,ls_ls_MessageParser_LoadBalancerInterface);
+		ls_MessageParser_LoadBalancerInterface = Nil;
+		ls_ls_VirusScanner_LoadBalancerInterface = Cons(ls_VirusScanner_LoadBalancerInterface,ls_ls_VirusScanner_LoadBalancerInterface);
+		ls_VirusScanner_LoadBalancerInterface = Nil;
+		ls_ls_NSFWDetector_LoadBalancerInterface = Cons(ls_NSFWDetector_LoadBalancerInterface,ls_ls_NSFWDetector_LoadBalancerInterface);
+		ls_NSFWDetector_LoadBalancerInterface = Nil;
+		ls_ls_SentimentAnalyser_LoadBalancerInterface = Cons(ls_SentimentAnalyser_LoadBalancerInterface,ls_ls_SentimentAnalyser_LoadBalancerInterface);
+		ls_SentimentAnalyser_LoadBalancerInterface = Nil;
+		ls_ls_TextAnalyser_LoadBalancerInterface = Cons(ls_TextAnalyser_LoadBalancerInterface,ls_ls_TextAnalyser_LoadBalancerInterface);
+		ls_TextAnalyser_LoadBalancerInterface = Nil;
+		ls_ls_ImageAnalyser_LoadBalancerInterface = Cons(ls_ImageAnalyser_LoadBalancerInterface,ls_ls_ImageAnalyser_LoadBalancerInterface);
+		ls_ImageAnalyser_LoadBalancerInterface = Nil;
+		ls_ls_LinkAnalyser_LoadBalancerInterface = Cons(ls_LinkAnalyser_LoadBalancerInterface,ls_ls_LinkAnalyser_LoadBalancerInterface);
+		ls_LinkAnalyser_LoadBalancerInterface = Nil;
+		ls_ls_DeploymentComponent = Cons(ls_DeploymentComponent,ls_ls_DeploymentComponent);
+		ls_DeploymentComponent = Nil;
+		this.deploy_aux();
+	}
+
+	Unit undeploy() {
+		if (ls_ls_DeploymentComponent != Nil) {
+			this.undeploy_aux();
+			ls_DeploymentComponent = head(ls_ls_DeploymentComponent);
+			ls_ls_DeploymentComponent = tail(ls_ls_DeploymentComponent);
+				ls_HeaderAnalyser_LoadBalancerInterface = head(ls_ls_HeaderAnalyser_LoadBalancerInterface);
+				ls_MessageReceiver_LoadBalancerInterface = head(ls_ls_MessageReceiver_LoadBalancerInterface);
+				ls_AttachmentsManager_LoadBalancerInterface = head(ls_ls_AttachmentsManager_LoadBalancerInterface);
+				ls_ImageRecognizer_LoadBalancerInterface = head(ls_ls_ImageRecognizer_LoadBalancerInterface);
+				ls_MessageAnalyser_LoadBalancerInterface = head(ls_ls_MessageAnalyser_LoadBalancerInterface);
+				ls_MessageParser_LoadBalancerInterface = head(ls_ls_MessageParser_LoadBalancerInterface);
+				ls_VirusScanner_LoadBalancerInterface = head(ls_ls_VirusScanner_LoadBalancerInterface);
+				ls_NSFWDetector_LoadBalancerInterface = head(ls_ls_NSFWDetector_LoadBalancerInterface);
+				ls_SentimentAnalyser_LoadBalancerInterface = head(ls_ls_SentimentAnalyser_LoadBalancerInterface);
+				ls_TextAnalyser_LoadBalancerInterface = head(ls_ls_TextAnalyser_LoadBalancerInterface);
+				ls_ImageAnalyser_LoadBalancerInterface = head(ls_ls_ImageAnalyser_LoadBalancerInterface);
+				ls_LinkAnalyser_LoadBalancerInterface = head(ls_ls_LinkAnalyser_LoadBalancerInterface);
+			ls_ls_HeaderAnalyser_LoadBalancerInterface = tail(ls_ls_HeaderAnalyser_LoadBalancerInterface);
+			ls_ls_MessageReceiver_LoadBalancerInterface = tail(ls_ls_MessageReceiver_LoadBalancerInterface);
+			ls_ls_AttachmentsManager_LoadBalancerInterface = tail(ls_ls_AttachmentsManager_LoadBalancerInterface);
+			ls_ls_ImageRecognizer_LoadBalancerInterface = tail(ls_ls_ImageRecognizer_LoadBalancerInterface);
+			ls_ls_MessageAnalyser_LoadBalancerInterface = tail(ls_ls_MessageAnalyser_LoadBalancerInterface);
+			ls_ls_MessageParser_LoadBalancerInterface = tail(ls_ls_MessageParser_LoadBalancerInterface);
+			ls_ls_VirusScanner_LoadBalancerInterface = tail(ls_ls_VirusScanner_LoadBalancerInterface);
+			ls_ls_NSFWDetector_LoadBalancerInterface = tail(ls_ls_NSFWDetector_LoadBalancerInterface);
+			ls_ls_SentimentAnalyser_LoadBalancerInterface = tail(ls_ls_SentimentAnalyser_LoadBalancerInterface);
+			ls_ls_TextAnalyser_LoadBalancerInterface = tail(ls_ls_TextAnalyser_LoadBalancerInterface);
+			ls_ls_ImageAnalyser_LoadBalancerInterface = tail(ls_ls_ImageAnalyser_LoadBalancerInterface);
+			ls_ls_LinkAnalyser_LoadBalancerInterface = tail(ls_ls_LinkAnalyser_LoadBalancerInterface);
+		}
+	}
+
+
+	Unit deploy_aux() {
+		Map<DeploymentComponent,Rat> speedPatchMap = map[];
+		DeploymentComponent c4_large_11 = cloudProvider.launchInstanceNamed("c4_large");
+		ls_DeploymentComponent = Cons(c4_large_11,ls_DeploymentComponent);
+		speedPatchMap = put(speedPatchMap,c4_large_11,0);
+		DeploymentComponent c4_large_10 = cloudProvider.launchInstanceNamed("c4_large");
+		ls_DeploymentComponent = Cons(c4_large_10,ls_DeploymentComponent);
+		speedPatchMap = put(speedPatchMap,c4_large_10,0);
+		DeploymentComponent c4_large_1 = cloudProvider.launchInstanceNamed("c4_large");
+		ls_DeploymentComponent = Cons(c4_large_1,ls_DeploymentComponent);
+		speedPatchMap = put(speedPatchMap,c4_large_1,0);
+		DeploymentComponent c4_large_0 = cloudProvider.launchInstanceNamed("c4_large");
+		ls_DeploymentComponent = Cons(c4_large_0,ls_DeploymentComponent);
+		speedPatchMap = put(speedPatchMap,c4_large_0,0);
+		DeploymentComponent c4_large_3 = cloudProvider.launchInstanceNamed("c4_large");
+		ls_DeploymentComponent = Cons(c4_large_3,ls_DeploymentComponent);
+		speedPatchMap = put(speedPatchMap,c4_large_3,0);
+		DeploymentComponent c4_large_2 = cloudProvider.launchInstanceNamed("c4_large");
+		ls_DeploymentComponent = Cons(c4_large_2,ls_DeploymentComponent);
+		speedPatchMap = put(speedPatchMap,c4_large_2,0);
+		DeploymentComponent c4_large_5 = cloudProvider.launchInstanceNamed("c4_large");
+		ls_DeploymentComponent = Cons(c4_large_5,ls_DeploymentComponent);
+		speedPatchMap = put(speedPatchMap,c4_large_5,0);
+		DeploymentComponent c4_large_4 = cloudProvider.launchInstanceNamed("c4_large");
+		ls_DeploymentComponent = Cons(c4_large_4,ls_DeploymentComponent);
+		speedPatchMap = put(speedPatchMap,c4_large_4,0);
+		DeploymentComponent c4_large_7 = cloudProvider.launchInstanceNamed("c4_large");
+		ls_DeploymentComponent = Cons(c4_large_7,ls_DeploymentComponent);
+		speedPatchMap = put(speedPatchMap,c4_large_7,0);
+		DeploymentComponent c4_large_6 = cloudProvider.launchInstanceNamed("c4_large");
+		ls_DeploymentComponent = Cons(c4_large_6,ls_DeploymentComponent);
+		speedPatchMap = put(speedPatchMap,c4_large_6,0);
+		DeploymentComponent c4_large_9 = cloudProvider.launchInstanceNamed("c4_large");
+		ls_DeploymentComponent = Cons(c4_large_9,ls_DeploymentComponent);
+		speedPatchMap = put(speedPatchMap,c4_large_9,0);
+		DeploymentComponent c4_large_8 = cloudProvider.launchInstanceNamed("c4_large");
+		ls_DeploymentComponent = Cons(c4_large_8,ls_DeploymentComponent);
+		speedPatchMap = put(speedPatchMap,c4_large_8,0);
+		[DC: c4_large_4] ImageAnalyser_LoadBalancerInterface odefault___ImageAnalyser_LoadBalancer_0_c4_large_4 = new ImageAnalyser_LoadBalancer(prometheus,dbObj);
+		Rat coreRequired_odefault___ImageAnalyser_LoadBalancer_0_c4_large_4 = 2;
+		speedPatchMap = put(speedPatchMap, c4_large_4, fromJust(lookup(speedPatchMap,c4_large_4)) + coreRequired_odefault___ImageAnalyser_LoadBalancer_0_c4_large_4);
+		ls_ImageAnalyser_LoadBalancerInterface = Cons(odefault___ImageAnalyser_LoadBalancer_0_c4_large_4, ls_ImageAnalyser_LoadBalancerInterface);
+		[DC: c4_large_10] MessageAnalyser_LoadBalancerInterface odefault___MessageAnalyser_LoadBalancer_0_c4_large_10 = new MessageAnalyser_LoadBalancer(prometheus,dbObj);
+		Rat coreRequired_odefault___MessageAnalyser_LoadBalancer_0_c4_large_10 = 2;
+		speedPatchMap = put(speedPatchMap, c4_large_10, fromJust(lookup(speedPatchMap,c4_large_10)) + coreRequired_odefault___MessageAnalyser_LoadBalancer_0_c4_large_10);
+		ls_MessageAnalyser_LoadBalancerInterface = Cons(odefault___MessageAnalyser_LoadBalancer_0_c4_large_10, ls_MessageAnalyser_LoadBalancerInterface);
+		[DC: c4_large_8] AttachmentsManager_LoadBalancerInterface odefault___AttachmentsManager_LoadBalancer_0_c4_large_8 = new AttachmentsManager_LoadBalancer(prometheus,dbObj);
+		Rat coreRequired_odefault___AttachmentsManager_LoadBalancer_0_c4_large_8 = 2;
+		speedPatchMap = put(speedPatchMap, c4_large_8, fromJust(lookup(speedPatchMap,c4_large_8)) + coreRequired_odefault___AttachmentsManager_LoadBalancer_0_c4_large_8);
+		ls_AttachmentsManager_LoadBalancerInterface = Cons(odefault___AttachmentsManager_LoadBalancer_0_c4_large_8, ls_AttachmentsManager_LoadBalancerInterface);
+		[DC: c4_large_5] LinkAnalyser_LoadBalancerInterface odefault___LinkAnalyser_LoadBalancer_0_c4_large_5 = new LinkAnalyser_LoadBalancer(prometheus,dbObj);
+		Rat coreRequired_odefault___LinkAnalyser_LoadBalancer_0_c4_large_5 = 2;
+		speedPatchMap = put(speedPatchMap, c4_large_5, fromJust(lookup(speedPatchMap,c4_large_5)) + coreRequired_odefault___LinkAnalyser_LoadBalancer_0_c4_large_5);
+		ls_LinkAnalyser_LoadBalancerInterface = Cons(odefault___LinkAnalyser_LoadBalancer_0_c4_large_5, ls_LinkAnalyser_LoadBalancerInterface);
+		[DC: c4_large_3] MessageReceiver_LoadBalancerInterface odefault___MessageReceiver_LoadBalancer_0_c4_large_3 = new MessageReceiver_LoadBalancer(prometheus,dbObj);
+		Rat coreRequired_odefault___MessageReceiver_LoadBalancer_0_c4_large_3 = 2;
+		speedPatchMap = put(speedPatchMap, c4_large_3, fromJust(lookup(speedPatchMap,c4_large_3)) + coreRequired_odefault___MessageReceiver_LoadBalancer_0_c4_large_3);
+		ls_MessageReceiver_LoadBalancerInterface = Cons(odefault___MessageReceiver_LoadBalancer_0_c4_large_3, ls_MessageReceiver_LoadBalancerInterface);
+		[DC: c4_large_9] MessageParser_LoadBalancerInterface odefault___MessageParser_LoadBalancer_0_c4_large_9 = new MessageParser_LoadBalancer(prometheus,dbObj);
+		Rat coreRequired_odefault___MessageParser_LoadBalancer_0_c4_large_9 = 2;
+		speedPatchMap = put(speedPatchMap, c4_large_9, fromJust(lookup(speedPatchMap,c4_large_9)) + coreRequired_odefault___MessageParser_LoadBalancer_0_c4_large_9);
+		ls_MessageParser_LoadBalancerInterface = Cons(odefault___MessageParser_LoadBalancer_0_c4_large_9, ls_MessageParser_LoadBalancerInterface);
+		[DC: c4_large_2] NSFWDetector_LoadBalancerInterface odefault___NSFWDetector_LoadBalancer_0_c4_large_2 = new NSFWDetector_LoadBalancer(prometheus,dbObj);
+		Rat coreRequired_odefault___NSFWDetector_LoadBalancer_0_c4_large_2 = 2;
+		speedPatchMap = put(speedPatchMap, c4_large_2, fromJust(lookup(speedPatchMap,c4_large_2)) + coreRequired_odefault___NSFWDetector_LoadBalancer_0_c4_large_2);
+		ls_NSFWDetector_LoadBalancerInterface = Cons(odefault___NSFWDetector_LoadBalancer_0_c4_large_2, ls_NSFWDetector_LoadBalancerInterface);
+		[DC: c4_large_0] HeaderAnalyser_LoadBalancerInterface odefault___HeaderAnalyser_LoadBalancer_0_c4_large_0 = new HeaderAnalyser_LoadBalancer(prometheus,dbObj);
+		Rat coreRequired_odefault___HeaderAnalyser_LoadBalancer_0_c4_large_0 = 2;
+		speedPatchMap = put(speedPatchMap, c4_large_0, fromJust(lookup(speedPatchMap,c4_large_0)) + coreRequired_odefault___HeaderAnalyser_LoadBalancer_0_c4_large_0);
+		ls_HeaderAnalyser_LoadBalancerInterface = Cons(odefault___HeaderAnalyser_LoadBalancer_0_c4_large_0, ls_HeaderAnalyser_LoadBalancerInterface);
+		[DC: c4_large_7] SentimentAnalyser_LoadBalancerInterface odefault___SentimentAnalyser_LoadBalancer_0_c4_large_7 = new SentimentAnalyser_LoadBalancer(prometheus,dbObj);
+		Rat coreRequired_odefault___SentimentAnalyser_LoadBalancer_0_c4_large_7 = 2;
+		speedPatchMap = put(speedPatchMap, c4_large_7, fromJust(lookup(speedPatchMap,c4_large_7)) + coreRequired_odefault___SentimentAnalyser_LoadBalancer_0_c4_large_7);
+		ls_SentimentAnalyser_LoadBalancerInterface = Cons(odefault___SentimentAnalyser_LoadBalancer_0_c4_large_7, ls_SentimentAnalyser_LoadBalancerInterface);
+		[DC: c4_large_11] VirusScanner_LoadBalancerInterface odefault___VirusScanner_LoadBalancer_0_c4_large_11 = new VirusScanner_LoadBalancer(prometheus,dbObj);
+		Rat coreRequired_odefault___VirusScanner_LoadBalancer_0_c4_large_11 = 2;
+		speedPatchMap = put(speedPatchMap, c4_large_11, fromJust(lookup(speedPatchMap,c4_large_11)) + coreRequired_odefault___VirusScanner_LoadBalancer_0_c4_large_11);
+		ls_VirusScanner_LoadBalancerInterface = Cons(odefault___VirusScanner_LoadBalancer_0_c4_large_11, ls_VirusScanner_LoadBalancerInterface);
+		[DC: c4_large_1] TextAnalyser_LoadBalancerInterface odefault___TextAnalyser_LoadBalancer_0_c4_large_1 = new TextAnalyser_LoadBalancer(prometheus,dbObj);
+		Rat coreRequired_odefault___TextAnalyser_LoadBalancer_0_c4_large_1 = 2;
+		speedPatchMap = put(speedPatchMap, c4_large_1, fromJust(lookup(speedPatchMap,c4_large_1)) + coreRequired_odefault___TextAnalyser_LoadBalancer_0_c4_large_1);
+		ls_TextAnalyser_LoadBalancerInterface = Cons(odefault___TextAnalyser_LoadBalancer_0_c4_large_1, ls_TextAnalyser_LoadBalancerInterface);
+		[DC: c4_large_6] ImageRecognizer_LoadBalancerInterface odefault___ImageRecognizer_LoadBalancer_0_c4_large_6 = new ImageRecognizer_LoadBalancer(prometheus,dbObj);
+		Rat coreRequired_odefault___ImageRecognizer_LoadBalancer_0_c4_large_6 = 2;
+		speedPatchMap = put(speedPatchMap, c4_large_6, fromJust(lookup(speedPatchMap,c4_large_6)) + coreRequired_odefault___ImageRecognizer_LoadBalancer_0_c4_large_6);
+		ls_ImageRecognizer_LoadBalancerInterface = Cons(odefault___ImageRecognizer_LoadBalancer_0_c4_large_6, ls_ImageRecognizer_LoadBalancerInterface);
+		this!patchSpeed(speedPatchMap);
+		await duration(waiting_time,waiting_time);
+	}
+
+	Unit undeploy_aux() {
+		ImageAnalyser_LoadBalancerInterface odefault___ImageAnalyser_LoadBalancer_0_c4_large_4 = nth(ls_ImageAnalyser_LoadBalancerInterface,0);
+		MessageAnalyser_LoadBalancerInterface odefault___MessageAnalyser_LoadBalancer_0_c4_large_10 = nth(ls_MessageAnalyser_LoadBalancerInterface,0);
+		AttachmentsManager_LoadBalancerInterface odefault___AttachmentsManager_LoadBalancer_0_c4_large_8 = nth(ls_AttachmentsManager_LoadBalancerInterface,0);
+		LinkAnalyser_LoadBalancerInterface odefault___LinkAnalyser_LoadBalancer_0_c4_large_5 = nth(ls_LinkAnalyser_LoadBalancerInterface,0);
+		MessageReceiver_LoadBalancerInterface odefault___MessageReceiver_LoadBalancer_0_c4_large_3 = nth(ls_MessageReceiver_LoadBalancerInterface,0);
+		MessageParser_LoadBalancerInterface odefault___MessageParser_LoadBalancer_0_c4_large_9 = nth(ls_MessageParser_LoadBalancerInterface,0);
+		NSFWDetector_LoadBalancerInterface odefault___NSFWDetector_LoadBalancer_0_c4_large_2 = nth(ls_NSFWDetector_LoadBalancerInterface,0);
+		HeaderAnalyser_LoadBalancerInterface odefault___HeaderAnalyser_LoadBalancer_0_c4_large_0 = nth(ls_HeaderAnalyser_LoadBalancerInterface,0);
+		SentimentAnalyser_LoadBalancerInterface odefault___SentimentAnalyser_LoadBalancer_0_c4_large_7 = nth(ls_SentimentAnalyser_LoadBalancerInterface,0);
+		VirusScanner_LoadBalancerInterface odefault___VirusScanner_LoadBalancer_0_c4_large_11 = nth(ls_VirusScanner_LoadBalancerInterface,0);
+		TextAnalyser_LoadBalancerInterface odefault___TextAnalyser_LoadBalancer_0_c4_large_1 = nth(ls_TextAnalyser_LoadBalancerInterface,0);
+		ImageRecognizer_LoadBalancerInterface odefault___ImageRecognizer_LoadBalancer_0_c4_large_6 = nth(ls_ImageRecognizer_LoadBalancerInterface,0);
+		while ( !isEmpty(ls_DeploymentComponent) ) {
+			cloudProvider.shutdownInstance(head(ls_DeploymentComponent));
+			ls_DeploymentComponent = tail(ls_DeploymentComponent);
+		}
+	}
+
+	Unit patchSpeed(Map<DeploymentComponent,Rat> dcs) {
+		foreach(entry in entries(dcs)) {
+			DeploymentComponent dc = fst(entry);
+			Rat coreUsed = snd(entry);
+			InfRat speed_aux = await dc!total(Speed);
+			Rat total_speed = case speed_aux {
+				Fin(x) => x;
+				_ => -1;
+			};
+			if(total_speed != -1) {
+				Rat totalCore = await dc!getNumberOfCores();
+				Rat speedPerCore = total_speed / totalCore;
+				dc!decrementResources(total_speed - (speedPerCore * coreUsed), Speed);
+			}
+		}
+	}
+}

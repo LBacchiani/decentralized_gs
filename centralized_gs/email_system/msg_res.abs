@@ -1,0 +1,28 @@
+module MsgRes;
+
+export *;
+
+interface MessageResultInterface{
+  Unit insertRes(String r);
+  Int getActivityWaiting();
+  String getRes();
+  Rat receptionTime();
+}
+
+class MessageResult(Int n, Rat receptionTime) implements MessageResultInterface {
+  Int nWaiting = n;
+  String messId = "";
+  String res = "";
+
+  Unit insertRes(String r) {
+    res = res + r + "\n";
+    nWaiting = nWaiting - 1;
+  }
+
+  Int getActivityWaiting() {return nWaiting;}
+
+  String getRes() {return res;}
+
+  Rat receptionTime() {return receptionTime;}
+
+}

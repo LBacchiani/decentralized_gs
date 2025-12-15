@@ -1,0 +1,82 @@
+module Simulation;
+
+export *;
+import * from Monitor;
+import * from Architecture;
+import * from ABS.DC;
+import * from InvariantsDeployer;
+import * from BaseScale;
+import * from Scale1;
+import * from Scale2;
+import * from Scale3;
+import * from Scale4;
+import * from Wrapper;
+import * from WorkloadGenerator;
+import * from Adaptation;
+import * from Prometheus;
+import * from Reconfig_Param;
+import * from Param;
+import * from DB;
+import * from Actuation;
+
+interface ISimulation {
+     Unit start();
+}
+
+class Simulation() implements ISimulation {
+
+     Unit start() {
+
+          CloudProvider cp = new CloudProvider("CloudProvider");
+          PrometheusInterface prometheus = new Prometheus();
+          DBInterface db = new DB(prometheus);
+          InvariantsDeployer c1 = new InvariantsDeployer(cp,prometheus,db);
+          await c1!deploy();
+          List<MessageReceiver_LoadBalancerInterface> messageReceiver_LoadBalancerList = await c1!getMessageReceiver_LoadBalancerInterface();
+          MessageReceiver_LoadBalancerInterface receiverLB = head(messageReceiver_LoadBalancerList);
+          List<MessageParser_LoadBalancerInterface> messageParser_LoadBalancerList = await c1!getMessageParser_LoadBalancerInterface();
+          MessageParser_LoadBalancerInterface parserLB = head(messageParser_LoadBalancerList);
+	     List<HeaderAnalyser_LoadBalancerInterface> headerAnalyser_LoadBalancerList = await c1!getHeaderAnalyser_LoadBalancerInterface();
+          HeaderAnalyser_LoadBalancerInterface headerLB = head(headerAnalyser_LoadBalancerList);
+	     List<LinkAnalyser_LoadBalancerInterface> linkAnalyser_LoadBalancerList = await c1!getLinkAnalyser_LoadBalancerInterface();
+          LinkAnalyser_LoadBalancerInterface linkLB = head(linkAnalyser_LoadBalancerList);
+	     List<TextAnalyser_LoadBalancerInterface> textAnalyser_LoadBalancerList = await c1!getTextAnalyser_LoadBalancerInterface();
+          TextAnalyser_LoadBalancerInterface textLB = head(textAnalyser_LoadBalancerList);
+	     List<SentimentAnalyser_LoadBalancerInterface> sentimentAnalyser_LoadBalancerList = await c1!getSentimentAnalyser_LoadBalancerInterface();
+          SentimentAnalyser_LoadBalancerInterface sentimentLB = head(sentimentAnalyser_LoadBalancerList);
+          List<VirusScanner_LoadBalancerInterface> virusScanner_LoadBalancerList = await c1!getVirusScanner_LoadBalancerInterface();
+          VirusScanner_LoadBalancerInterface virusScannerLB = head(virusScanner_LoadBalancerList);
+	     List<AttachmentsManager_LoadBalancerInterface> attachmentsManager_LoadBalancerList = await c1!getAttachmentsManager_LoadBalancerInterface();
+          AttachmentsManager_LoadBalancerInterface attManagerLB = head(attachmentsManager_LoadBalancerList);
+	     List<ImageAnalyser_LoadBalancerInterface> imageAnalyser_LoadBalancerList = await c1!getImageAnalyser_LoadBalancerInterface();
+          ImageAnalyser_LoadBalancerInterface imageAnalyzerLB = head(imageAnalyser_LoadBalancerList);
+	     List<NSFWDetector_LoadBalancerInterface> nsfwDetector_LoadBalancerList = await c1!getNSFWDetector_LoadBalancerInterface();
+          NSFWDetector_LoadBalancerInterface nsfwDetectorLB = head(nsfwDetector_LoadBalancerList);
+          List<ImageRecognizer_LoadBalancerInterface> imageRecognizer_LoadBalancerList = await c1!getImageRecognizer_LoadBalancerInterface();
+          ImageRecognizer_LoadBalancerInterface imageRecognizerLB = head(imageRecognizer_LoadBalancerList);
+          List<MessageAnalyser_LoadBalancerInterface> messageAnalyser_LoadBalancerList = await c1!getMessageAnalyser_LoadBalancerInterface();
+          MessageAnalyser_LoadBalancerInterface messageAnalyzerLB = head(messageAnalyser_LoadBalancerList);
+
+          ////SETUP///
+          BaseScale c2 = new BaseScale(cp, receiverLB, parserLB, headerLB, linkLB, textLB,  sentimentLB, virusScannerLB, attManagerLB, imageAnalyzerLB, nsfwDetectorLB, imageRecognizerLB, messageAnalyzerLB, db);
+          await c2!deploy();
+
+          Scale1 s1 = new Scale1(cp, receiverLB, parserLB, headerLB, linkLB, textLB,  sentimentLB, virusScannerLB, attManagerLB, imageAnalyzerLB, nsfwDetectorLB, imageRecognizerLB, messageAnalyzerLB, db);
+          WrapperScaleInterface w1 = new WrapperScale(s1, null, null, null);
+
+		Scale2 s2 = new Scale2(cp, receiverLB, parserLB, headerLB, linkLB, textLB,  sentimentLB, virusScannerLB, attManagerLB, imageAnalyzerLB, nsfwDetectorLB, imageRecognizerLB, messageAnalyzerLB, db);          
+          WrapperScaleInterface w2 = new WrapperScale(null, s2, null, null);
+
+          Scale3 s3 = new Scale3(cp, receiverLB, parserLB, headerLB, linkLB, textLB,  sentimentLB, virusScannerLB, attManagerLB, imageAnalyzerLB, nsfwDetectorLB, imageRecognizerLB, messageAnalyzerLB, db);
+          WrapperScaleInterface w3 = new WrapperScale(null, null, s3, null);
+
+          Scale4 s4 = new Scale4(cp, receiverLB, parserLB, headerLB, linkLB, textLB,  sentimentLB, virusScannerLB, attManagerLB, imageAnalyzerLB, nsfwDetectorLB, imageRecognizerLB, messageAnalyzerLB, db);
+          WrapperScaleInterface w4 = new WrapperScale(null, null, null, s4);
+          
+          AdaptationAlgorithm gs_scaler = new GS_Scaler(list[w1,w2,w3,w4], prometheus);
+          new Monitor(prometheus, gs_scaler);
+          // Rat delay = (100 + random(1500)) / 1000; //delay in ms
+          // await duration(delay * time_unit_to_sec());
+          new WorkloadGenerator(receiverLB);
+     }
+}

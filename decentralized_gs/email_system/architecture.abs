@@ -1,0 +1,797 @@
+module Architecture;
+
+export *;
+import * from ABS.DC;
+import * from ABS.SmartDeploy;
+import * from DB;
+import * from Param;
+import * from Prometheus;
+import * from Reconfig_Param;
+
+
+interface MessageReceiver_LoadBalancerInterface {
+    Unit connectInstance(MessageReceiverInterface newInstance);
+    MessageReceiverInterface disconnectInstance();
+    Unit newRequest(String mailData);
+    Unit removeMessage();
+}
+
+class MessageReceiver_LoadBalancer(PrometheusInterface prometheus, DBInterface db) implements MessageReceiver_LoadBalancerInterface {
+  List<MessageReceiverInterface> instancesConnected = list[];
+  Int nextInstance = -1;
+  Int pending = 0;
+  Metric globalTotal;
+  Metric loss;
+  Metric total;
+  Metric localLoss;
+
+  {
+    total = new DiscreteMetric(Pair("tot","MessageReceiver"));
+    globalTotal = new DiscreteMetric(Pair("tot",global_service_name()));
+    loss = new DiscreteMetric(Pair("rej",global_service_name()));
+    localLoss = new DiscreteMetric(Pair("rej", "MessageReceiver"));
+    prometheus!register(list[total,globalTotal,loss, localLoss]);
+  }
+
+  Unit connectInstance(MessageReceiverInterface newInstance){instancesConnected = appendright(instancesConnected, newInstance);}
+
+  MessageReceiverInterface disconnectInstance(){
+    MessageReceiverInterface removedInstance = nth(instancesConnected, length(instancesConnected)-1);
+    instancesConnected = without(instancesConnected, removedInstance);
+    return removedInstance;
+  }
+
+  Unit newRequest(String mailData){
+    globalTotal!push(1);
+    total!push(1);
+    if(pending < buffer_size()) {
+      localLoss!push(0);
+      nextInstance = (nextInstance + 1) % length(instancesConnected);
+      MessageReceiverInterface selectedInstance = nth(instancesConnected, nextInstance);
+      pending = pending + 1;
+      selectedInstance!newRequest(mailData, this);
+    } else {
+      localLoss!push(1);
+      loss!push(1);
+    }
+  }
+
+  Unit removeMessage() {pending = pending - 1;}
+
+}
+
+interface MessageReceiverInterface {
+    Unit newRequest(String mailData, MessageReceiver_LoadBalancerInterface balancer);
+}
+
+class MessageReceiver(PrometheusInterface prometheus, MessageParser_LoadBalancerInterface parserLoadBalancer) implements MessageReceiverInterface {
+  Int cores = 1;
+  Metric completed;
+  {
+    completed = new DiscreteMetric(Pair("comp", "MessageReceiver"));
+    prometheus!register(list[completed]);
+  }
+
+  Unit newRequest(String mailData, MessageReceiver_LoadBalancerInterface balancer) {
+    [Cost: speed_per_core() * time_unit_to_sec() *  cores / nth(serviceMCLs(),0)] skip;
+    completed!push(1);
+    Rat received_at = timeValue(now());
+    balancer!removeMessage();
+    parserLoadBalancer!newRequest(mailData, received_at);
+  }
+}
+
+
+interface MessageParser_LoadBalancerInterface {
+    Unit connectInstance(MessageParserInterface newInstance);
+    MessageParserInterface disconnectInstance();
+    Unit newRequest (String mailData, Rat received_at);
+    Unit removeMessage ();
+}
+
+[SmartDeployCost : "{\"class\" : \"MessageParser_LoadBalancer\",\"scenarios\" : [{\"name\" : \"default\",\"provide\" : -1,\"cost\" : {\"Cores\" : 2,\"Memory\" : 200},\"sig\" : [{\"kind\" : \"require\",\"type\" : \"PrometheusInterface\"}, {\"kind\" : \"require\",\"type\" : \"DBInterface\"}], \"methods\" : [{\"add\" : {\"name\" : \"connectInstance\",\"param_type\" : \"MessageParserInterface\"},\"remove\" : {\"name\" : \"disconnectInstance\", \"return_type\": \"MessageParserInterface\"}}]}]}"]
+class MessageParser_LoadBalancer(PrometheusInterface prometheus, DBInterface db) implements MessageParser_LoadBalancerInterface {
+  List<MessageParserInterface> instancesConnected = list[];
+  Int nextInstance = -1;
+  Int id = 0;
+  Metric total;
+  Metric loss;
+  Metric localLoss;
+  Int pending = 0;
+  {
+      total = new DiscreteMetric(Pair("tot","Parser"));
+      loss = new DiscreteMetric(Pair("rej",global_service_name()));
+      localLoss = new DiscreteMetric(Pair("rej", "Parser"));
+      prometheus!register(list[total,loss, localLoss]);
+  }
+
+  Unit connectInstance(MessageParserInterface newInstance){
+    instancesConnected = appendright(instancesConnected, newInstance);
+  }
+
+  MessageParserInterface disconnectInstance(){
+    MessageParserInterface removedInstance = nth(instancesConnected, length(instancesConnected) - 1);
+    instancesConnected = without(instancesConnected, removedInstance);
+    return removedInstance;
+  }
+
+  Unit newRequest (String mailData, Rat received_at){
+      //Int n = length(instancesConnected);
+      //Int nextInstance = weightedChoice(n)
+      //MessageParserInterface selectedInstance = nth(instancesConnected, nextInstance);
+    total!push(1);
+    if (pending < buffer_size()) {
+      pending = pending + 1;
+      localLoss!push(0);
+      nextInstance = (nextInstance + 1) % length(instancesConnected);  
+      MessageParserInterface selectedInstance = nth(instancesConnected, nextInstance);
+      selectedInstance!parseMessage(id, received_at, this);
+      id = id + 1;
+    } else {
+      loss!push(1);
+      localLoss!push(1);
+    }
+  }
+
+  Unit removeMessage () {
+    pending = pending - 1;
+  }
+}
+
+interface MessageParserInterface {
+  Unit parseMessage (Int id, Rat received_at, MessageParser_LoadBalancerInterface balancer);
+}
+
+class MessageParser(PrometheusInterface prometheus, HeaderAnalyser_LoadBalancerInterface headerAnalyserLoadBalancer, LinkAnalyser_LoadBalancerInterface linkAnalyserLoadBalancer, TextAnalyser_LoadBalancerInterface textAnalyserLoadBalancer, VirusScanner_LoadBalancerInterface virusScannerLoadBalancer, MessageAnalyser_LoadBalancerInterface messageAnalyserLoadBalancer, DBInterface db) implements MessageParserInterface {
+  Int cores = 1;
+  Metric completed;
+  {
+    completed = new DiscreteMetric(Pair("comp", "Parser"));
+    prometheus!register(list[completed]);
+  }
+
+  Unit parseMessage (Int id, Rat received_at, MessageParser_LoadBalancerInterface balancer){
+    [Cost: speed_per_core() * time_unit_to_sec() *  cores / nth(serviceMCLs(),1)] skip;
+    completed!push(1);
+    balancer!removeMessage();
+    Set<String> attachments = set[];
+    Int n_attachments = random(5);
+    String messageId = toString(id);
+    db!insertMessageInformation(messageId, 3+n_attachments);
+    headerAnalyserLoadBalancer!newRequest(messageId,received_at);
+    linkAnalyserLoadBalancer!newRequest(messageId,received_at);
+    textAnalyserLoadBalancer!newRequest(messageId,received_at);
+    while(n_attachments > 0){
+      virusScannerLoadBalancer!newRequest(messageId,received_at);
+      n_attachments = n_attachments - 1;
+    }
+  }
+}
+
+
+interface HeaderAnalyser_LoadBalancerInterface {
+    Unit connectInstance(HeaderAnalyserInterface newInstance);
+    HeaderAnalyserInterface disconnectInstance();
+    Unit newRequest (String messageId, Rat received_at);
+}
+
+class HeaderAnalyser_LoadBalancer(PrometheusInterface prometheus, DBInterface db)  implements HeaderAnalyser_LoadBalancerInterface {
+  List<HeaderAnalyserInterface> instancesConnected = list[];
+  Int nextInstance = -1;
+
+  Unit connectInstance(HeaderAnalyserInterface newInstance){instancesConnected = appendright(instancesConnected, newInstance);}
+
+  HeaderAnalyserInterface disconnectInstance(){
+    HeaderAnalyserInterface removedInstance = nth(instancesConnected,length(instancesConnected) - 1);
+    instancesConnected = without(instancesConnected, removedInstance);
+    return removedInstance;
+  }
+
+  Unit newRequest (String messageId, Rat received_at){
+      HeaderAnalyserInterface selectedInstance = nth(instancesConnected, 0);
+      selectedInstance!analyzeHeaders(messageId, received_at);
+  }
+}
+
+interface HeaderAnalyserInterface {
+  Unit analyzeHeaders (String messageId, Rat received_at);
+}
+
+class HeaderAnalyser(PrometheusInterface prometheus, MessageAnalyser_LoadBalancerInterface messageAnalyserLoadBalancer) implements HeaderAnalyserInterface {
+  Unit analyzeHeaders (String messageId, Rat received_at) {
+    messageAnalyserLoadBalancer!insertResult(messageId, received_at);
+  }
+}
+
+interface LinkAnalyser_LoadBalancerInterface {
+  Unit connectInstance(LinkAnalyserInterface newInstance);
+  LinkAnalyserInterface disconnectInstance();
+  Unit newRequest(String messageId, Rat received_at);
+}
+
+class LinkAnalyser_LoadBalancer(PrometheusInterface prometheus, DBInterface db)  implements LinkAnalyser_LoadBalancerInterface {
+  List<LinkAnalyserInterface> instancesConnected = list[];
+  Int nextInstance = -1;
+
+  Unit connectInstance(LinkAnalyserInterface newInstance){instancesConnected = appendright(instancesConnected, newInstance);}
+
+  LinkAnalyserInterface disconnectInstance(){
+    LinkAnalyserInterface removedInstance = nth(instancesConnected,length(instancesConnected) - 1);
+    instancesConnected = without(instancesConnected, removedInstance);
+    return removedInstance;
+  }
+
+  Unit newRequest(String messageId, Rat received_at){
+    LinkAnalyserInterface selectedInstance = nth(instancesConnected, 0);
+    selectedInstance!analyzeLink(messageId, received_at);
+  }
+}
+
+interface LinkAnalyserInterface {
+  Unit analyzeLink (String messageId, Rat received_at);
+}
+
+class LinkAnalyser(PrometheusInterface prometheus, MessageAnalyser_LoadBalancerInterface messageAnalyserLoadBalancer) implements LinkAnalyserInterface {
+  Unit analyzeLink (String messageId, Rat received_at) {
+    messageAnalyserLoadBalancer!insertResult(messageId, received_at);
+  }
+}
+
+interface TextAnalyser_LoadBalancerInterface {
+  Unit connectInstance(TextAnalyserInterface newInstance);
+  TextAnalyserInterface disconnectInstance();
+  Unit newRequest(String messageId, Rat received_at);
+}
+
+class TextAnalyser_LoadBalancer(PrometheusInterface prometheus, DBInterface db)  implements TextAnalyser_LoadBalancerInterface {
+  List<TextAnalyserInterface> instancesConnected = list[];
+  Int nextInstance = -1;
+
+  Unit connectInstance(TextAnalyserInterface newInstance){instancesConnected = appendright(instancesConnected, newInstance);}
+
+  TextAnalyserInterface disconnectInstance(){
+    TextAnalyserInterface removedInstance = nth(instancesConnected,length(instancesConnected) - 1);
+    instancesConnected = without(instancesConnected, removedInstance);
+    return removedInstance;
+  }
+
+  Unit newRequest(String messageId, Rat received_at){
+    TextAnalyserInterface selectedInstance = nth(instancesConnected, 0);
+    selectedInstance!analyzeText(messageId, received_at);
+  }
+}
+
+interface TextAnalyserInterface {
+  Unit analyzeText(String messageId, Rat received_at);
+}
+
+class TextAnalyser(PrometheusInterface prometheus, SentimentAnalyser_LoadBalancerInterface sentimentAnalayserLoadBalancer, MessageAnalyser_LoadBalancerInterface messageAnalyserLoadBalancer) implements TextAnalyserInterface {
+
+  Unit analyzeText (String messageId, Rat received_at) {
+    Bool refused = False;
+    Int n_text_blocks = random(4) + 1;
+    List<Maybe<Fut<String>>> futList = list[];
+    while (length(futList) < n_text_blocks) {
+      Maybe<Fut<String>> currentFuture = sentimentAnalayserLoadBalancer.newRequest(messageId);
+      futList = appendright(futList, currentFuture);
+    }
+		while (futList != Nil) {
+      Maybe<Fut<String>> maybe = head(futList);
+      futList = tail(futList);
+      if(!isJust(maybe)) {
+        refused = True;
+        futList = Nil;
+      } else {
+        Fut<String> currentFuture = fromJust(maybe);
+        await currentFuture?;
+      }
+		}
+    if(!refused){messageAnalyserLoadBalancer!insertResult(messageId, received_at);}
+  }
+}
+
+interface SentimentAnalyser_LoadBalancerInterface {
+  Unit connectInstance(SentimentAnalyserInterface newInstance);
+  SentimentAnalyserInterface disconnectInstance();
+  Maybe<Fut<String>> newRequest(String id);
+  Unit removeMessage();
+}
+
+class SentimentAnalyser_LoadBalancer(PrometheusInterface prometheus, DBInterface db)  implements SentimentAnalyser_LoadBalancerInterface {
+  List<SentimentAnalyserInterface> instancesConnected = list[];
+  Int nextInstance = -1;
+  Metric total;
+  Int pending = 0;
+  Metric localLoss;
+  {
+      total = new DiscreteMetric(Pair("tot","SentimentAnalyser"));
+      localLoss = new DiscreteMetric(Pair("rej", "SentimentAnalyser"));
+      prometheus!register(list[total, localLoss]);
+  }
+
+  Unit connectInstance(SentimentAnalyserInterface newInstance){instancesConnected = appendright(instancesConnected, newInstance);}
+
+  SentimentAnalyserInterface disconnectInstance(){
+    SentimentAnalyserInterface removedInstance = nth(instancesConnected, length(instancesConnected)-1);
+    instancesConnected = without(instancesConnected, removedInstance);
+    return removedInstance;
+  }
+
+  Maybe<Fut<String>> newRequest(String messageId){
+      Maybe<Fut<String>> res = Nothing;
+      total!push(1);
+      if(pending < buffer_size()) {
+        pending = pending + 1;
+        localLoss!push(0);
+        nextInstance = (nextInstance + 1) % length(instancesConnected);
+        SentimentAnalyserInterface selectedInstance = nth(instancesConnected, nextInstance);
+        Fut<String> fut = selectedInstance!analyzeSentiments(this);
+        res = Just(fut);
+      } else {
+        localLoss!push(1);
+        db!removeMessage(messageId);
+      }
+      return res;
+  }
+
+  Unit removeMessage() {pending = pending - 1;}
+}
+
+interface SentimentAnalyserInterface {
+  String analyzeSentiments(SentimentAnalyser_LoadBalancerInterface balancer);
+}
+
+class SentimentAnalyser(PrometheusInterface prometheus) implements SentimentAnalyserInterface {
+  Int cores = 4;
+  Metric completed;
+  {
+    completed = new DiscreteMetric(Pair("comp", "SentimentAnalyser"));
+    prometheus!register(list[completed]);
+  }
+  String analyzeSentiments (SentimentAnalyser_LoadBalancerInterface balancer){
+    //analyze message body and return the results
+    [Cost: speed_per_core() * time_unit_to_sec() *  cores / nth(serviceMCLs(),5)] skip;
+    completed!push(1);
+    balancer!removeMessage();
+    return "";
+  }
+}
+
+interface VirusScanner_LoadBalancerInterface {
+  Unit connectInstance(VirusScannerInterface newInstance);
+  VirusScannerInterface disconnectInstance();
+  Unit newRequest (String messageId, Rat received_at);
+  Unit removeMessage();
+}
+
+class VirusScanner_LoadBalancer(PrometheusInterface prometheus, DBInterface db)  implements VirusScanner_LoadBalancerInterface {
+  List<VirusScannerInterface> instancesConnected = list[];
+  Int nextInstance = -1;
+  Metric total;
+  Int pending = 0;
+  Metric localLoss;
+  {
+      total = new DiscreteMetric(Pair("tot","VirusScanner"));
+      localLoss = new DiscreteMetric(Pair("rej", "VirusScanner"));
+      prometheus!register(list[total, localLoss]);  
+    }
+
+  Unit connectInstance(VirusScannerInterface newInstance) {
+    instancesConnected = appendright(instancesConnected, newInstance);
+  }
+
+  VirusScannerInterface disconnectInstance(){
+    VirusScannerInterface removedInstance = nth(instancesConnected,length(instancesConnected) - 1);
+    instancesConnected = without(instancesConnected, removedInstance);
+    return removedInstance;
+  }
+
+  Unit newRequest (String messageId, Rat received_at){
+    total!push(1);
+    if (pending < buffer_size()) {
+      pending = pending + 1;
+      localLoss!push(0);
+      nextInstance = (nextInstance + 1) % length(instancesConnected);  
+      VirusScannerInterface selectedInstance = nth(instancesConnected, nextInstance);
+      selectedInstance!scanAttachment(messageId,received_at,this);
+    } else {
+      db!removeMessage(messageId);
+      localLoss!push(1);
+    }
+  }
+
+  Unit removeMessage () {
+    pending = pending - 1;
+
+  }
+
+}
+
+interface VirusScannerInterface {
+  Unit scanAttachment(String messageId, Rat received_at, VirusScanner_LoadBalancerInterface balancer);
+}
+
+class VirusScanner(PrometheusInterface prometheus, AttachmentsManager_LoadBalancerInterface attachmentsManagerLoadBalancer, MessageAnalyser_LoadBalancerInterface messageAnalyserLoadBalancer) implements VirusScannerInterface {
+  Int cores = 4;
+  Metric completed;
+  {
+    completed = new DiscreteMetric(Pair("comp", "VirusScanner"));
+    prometheus!register(list[completed]);
+  }
+
+  Unit scanAttachment(String messageId, Rat received_at, VirusScanner_LoadBalancerInterface balancer) {
+    [Cost: speed_per_core() * time_unit_to_sec() * cores / nth(serviceMCLs(),6)] skip;
+    completed!push(1);
+    balancer!removeMessage();
+    Bool virusFound = random(4) == 0;
+    if (virusFound) { 
+      messageAnalyserLoadBalancer!insertResult(messageId, received_at);
+    }
+    else { 
+      attachmentsManagerLoadBalancer!newRequest(messageId, received_at);
+    }
+  }
+}
+
+interface AttachmentsManager_LoadBalancerInterface {
+  Unit connectInstance(AttachmentsManagerInterface newInstance);
+  AttachmentsManagerInterface disconnectInstance();
+  Unit newRequest (String messageId, Rat received_at);
+  Unit removeMessage();
+}
+
+class AttachmentsManager_LoadBalancer(PrometheusInterface prometheus, DBInterface db)  implements AttachmentsManager_LoadBalancerInterface {
+  List<AttachmentsManagerInterface> instancesConnected = list[];
+  Int nextInstance = -1;
+  Metric total;
+  Metric localLoss;
+  Int pending = 0;
+  {
+      total = new DiscreteMetric(Pair("tot","AttachmentsManager"));
+      localLoss = new DiscreteMetric(Pair("rej", "AttachmentsManager"));
+      prometheus!register(list[total, localLoss]);    
+  }
+
+  Unit connectInstance(AttachmentsManagerInterface newInstance){
+    instancesConnected = appendright(instancesConnected, newInstance);
+  }
+
+  AttachmentsManagerInterface disconnectInstance(){
+    AttachmentsManagerInterface removedInstance = nth(instancesConnected,length(instancesConnected) - 1);
+    instancesConnected = without(instancesConnected, removedInstance);
+    return removedInstance;
+  }
+
+  Unit newRequest(String messageId, Rat received_at){
+    total!push(1);
+    if (pending < buffer_size()) {
+      localLoss!push(0);
+      pending = pending + 1;
+      nextInstance = (nextInstance + 1) % length(instancesConnected);  
+      AttachmentsManagerInterface selectedInstance = nth(instancesConnected, nextInstance);      
+      selectedInstance!manageAttachments(messageId,received_at,this);
+    } else {
+      db!removeMessage(messageId);
+      localLoss!push(1);
+    }
+  }
+
+  Unit removeMessage () {
+    pending = pending - 1;
+
+  }
+
+}
+
+interface AttachmentsManagerInterface {
+  Unit manageAttachments(String messageId, Rat received_at, AttachmentsManager_LoadBalancerInterface balancer);
+}
+
+class AttachmentsManager(PrometheusInterface prometheus, ImageAnalyser_LoadBalancerInterface imageAnalyserLoadBalancer) implements AttachmentsManagerInterface {
+  Int cores = 1;
+  Metric completed;
+  {
+    completed = new DiscreteMetric(Pair("comp", "AttachmentsManager"));
+    prometheus!register(list[completed]);
+  }
+
+  Unit manageAttachments(String messageId, Rat received_at, AttachmentsManager_LoadBalancerInterface balancer){
+    [Cost: speed_per_core() * time_unit_to_sec() * cores / nth(serviceMCLs(),7)] skip;
+    completed!push(1);
+    balancer!removeMessage();
+    imageAnalyserLoadBalancer!newRequest(messageId, received_at);
+  }
+}
+
+interface ImageAnalyser_LoadBalancerInterface {
+  Unit connectInstance(ImageAnalyserInterface newInstance);
+  ImageAnalyserInterface disconnectInstance();
+  Unit newRequest(String messageId, Rat received_at);
+  Unit removeMessage();
+}
+
+class ImageAnalyser_LoadBalancer(PrometheusInterface prometheus, DBInterface db)  implements ImageAnalyser_LoadBalancerInterface {
+  List<ImageAnalyserInterface> instancesConnected = list[];
+  Int nextInstance = -1;
+  Metric total;
+  Metric localLoss;
+  Int pending = 0;
+  {
+      total = new DiscreteMetric(Pair("tot","ImageAnalyser"));
+      localLoss = new DiscreteMetric(Pair("rej", "ImageAnalyser"));
+      prometheus!register(list[total, localLoss]);      
+  }
+
+  Unit connectInstance(ImageAnalyserInterface newInstance){
+    instancesConnected = appendright(instancesConnected, newInstance);
+  }
+
+  ImageAnalyserInterface disconnectInstance(){
+    ImageAnalyserInterface removedInstance = nth(instancesConnected,length(instancesConnected) - 1);
+    instancesConnected = without(instancesConnected, removedInstance);
+    return removedInstance;
+  }
+
+  Unit newRequest (String messageId, Rat received_at){
+    total!push(1);
+      //Int n = length(instancesConnected);
+      //Int nextInstance = weightedChoice(n)
+      //ImageAnalyserInterface selectedInstance = nth(instancesConnected, nextInstance);
+
+    if (pending < buffer_size()) {
+      pending = pending + 1;
+      localLoss!push(0);
+      nextInstance = (nextInstance + 1) % length(instancesConnected);  
+      ImageAnalyserInterface selectedInstance = nth(instancesConnected, nextInstance);      
+      selectedInstance!analyzeImage(messageId, received_at, this);
+    } else {
+      db!removeMessage(messageId);
+      localLoss!push(1);
+    }
+  }
+
+  Unit removeMessage () {
+    pending = pending - 1;
+
+  }
+}
+
+interface ImageAnalyserInterface {
+  Unit analyzeImage(String messageId, Rat received_at, ImageAnalyser_LoadBalancerInterface balancer);
+}
+
+class ImageAnalyser(PrometheusInterface prometheus, NSFWDetector_LoadBalancerInterface nsfwDetectorLoadBalancer, ImageRecognizer_LoadBalancerInterface imageRecognizerLoadBalancer, MessageAnalyser_LoadBalancerInterface messageAnalyserLoadBalancer) implements ImageAnalyserInterface {
+  Int cores = 1;
+  Metric completed;
+  {
+    completed = new DiscreteMetric(Pair("comp", "ImageAnalyser"));
+    prometheus!register(list[completed]);
+  }
+
+  Unit analyzeImage (String messageId, Rat received_at, ImageAnalyser_LoadBalancerInterface balancer){
+    [Cost: speed_per_core() * time_unit_to_sec() * cores / nth(serviceMCLs(),8)] skip;
+    completed!push(1);
+    balancer!removeMessage();
+    Maybe<Fut<Bool>> maybeNSFW = nsfwDetectorLoadBalancer.newRequest(messageId);
+    Maybe<Fut<String>> maybeImageCategory = imageRecognizerLoadBalancer.newRequest(messageId);
+    if(isJust(maybeNSFW) && isJust(maybeImageCategory)) {
+      Fut<Bool> futNSFW = fromJust(maybeNSFW);
+      await futNSFW?;
+      Fut<String> futImageCategory = fromJust(maybeImageCategory);
+      await futImageCategory?;
+      messageAnalyserLoadBalancer!insertResult(messageId, received_at);
+    }
+  }
+}
+
+interface NSFWDetector_LoadBalancerInterface {
+  Unit connectInstance(NSFWDetectorInterface newInstance);
+  NSFWDetectorInterface disconnectInstance();
+  Maybe<Fut<Bool>>newRequest (String id);
+  Unit removeMessage();
+}
+
+class NSFWDetector_LoadBalancer(PrometheusInterface prometheus, DBInterface db)  implements NSFWDetector_LoadBalancerInterface {
+  List<NSFWDetectorInterface> instancesConnected = list[];
+  Int nextInstance = -1;
+  Int pending = 0;
+  Metric total;
+  Metric localLoss;
+  {
+      total = new DiscreteMetric(Pair("tot","NSFWDetector"));
+      localLoss = new DiscreteMetric(Pair("rej", "NSFWDetector"));
+      prometheus!register(list[total, localLoss]);        
+  }
+
+  Unit connectInstance(NSFWDetectorInterface newInstance){instancesConnected = appendright(instancesConnected, newInstance);}
+
+  NSFWDetectorInterface disconnectInstance(){
+    NSFWDetectorInterface removedInstance = nth(instancesConnected, length(instancesConnected)-1);
+    instancesConnected = without(instancesConnected, removedInstance);
+    return removedInstance;
+  }
+
+  Maybe<Fut<Bool>> newRequest (String id){
+    Maybe<Fut<Bool>> res = Nothing;
+    total!push(1);
+    if(pending < buffer_size()) {
+      pending = pending + 1;
+      localLoss!push(0);
+      nextInstance = (nextInstance + 1) % length(instancesConnected);
+      NSFWDetectorInterface selectedInstance = nth(instancesConnected, nextInstance);
+      Fut<Bool> fut = selectedInstance!nsfwDetection(this);
+      res = Just(fut);
+    } else {
+      localLoss!push(1);
+      db!removeMessage(id);
+    }
+    return res;
+  }
+
+  Unit removeMessage() {pending = pending - 1;}
+}
+
+interface NSFWDetectorInterface {
+  Bool nsfwDetection(NSFWDetector_LoadBalancerInterface balancer);
+}
+
+class NSFWDetector(PrometheusInterface prometheus) implements NSFWDetectorInterface {
+  Int yesOrNot = -1;
+  Int cores = 6;
+  Metric completed;
+  {
+    completed = new DiscreteMetric(Pair("comp", "NSFWDetector"));
+    prometheus!register(list[completed]);
+  }
+
+  Bool nsfwDetection(NSFWDetector_LoadBalancerInterface balancer){
+		[Cost: speed_per_core() * time_unit_to_sec() * cores / nth(serviceMCLs(),9)] skip;
+    completed!push(1);
+    balancer!removeMessage();
+    yesOrNot = yesOrNot + 1;
+    return yesOrNot%3 == 0;
+  }
+}
+
+interface ImageRecognizer_LoadBalancerInterface {
+  Unit connectInstance(ImageRecognizerInterface newInstance);
+  ImageRecognizerInterface disconnectInstance();
+  Maybe<Fut<String>> newRequest(String id);
+  Unit removeMessage();
+}
+
+class ImageRecognizer_LoadBalancer(PrometheusInterface prometheus, DBInterface db)  implements ImageRecognizer_LoadBalancerInterface {
+  List<ImageRecognizerInterface> instancesConnected = list[];
+  Int nextInstance = -1;
+  Int pending = 0;
+  Metric total;
+  Metric localLoss;
+  {
+      total = new DiscreteMetric(Pair("tot","ImageRecognizer"));
+      localLoss = new DiscreteMetric(Pair("rej", "ImageRecognizer"));
+      prometheus!register(list[total, localLoss]);       
+  }
+
+
+  Unit connectInstance(ImageRecognizerInterface newInstance){instancesConnected = appendright(instancesConnected, newInstance);}
+
+  ImageRecognizerInterface disconnectInstance(){
+    ImageRecognizerInterface removedInstance = nth(instancesConnected, length(instancesConnected)-1);
+    instancesConnected = without(instancesConnected, removedInstance);
+    return removedInstance;
+  }
+
+  Maybe<Fut<String>> newRequest(String id){
+    Maybe<Fut<String>> res = Nothing;
+    total!push(1);
+    if(pending < buffer_size()) {
+      pending = pending + 1;
+      localLoss!push(0);
+      nextInstance = (nextInstance + 1) % length(instancesConnected);
+      ImageRecognizerInterface selectedInstance = nth(instancesConnected, nextInstance);
+      Fut<String> fut = selectedInstance!recognizeImage(this);
+      res = Just(fut);
+    } else {
+      localLoss!push(1);
+      db!removeMessage(id);
+    }
+    return res;
+  }
+
+  Unit removeMessage() {pending = pending - 1;}
+}
+
+interface ImageRecognizerInterface {
+  String recognizeImage(ImageRecognizer_LoadBalancerInterface balancer);
+}
+
+class ImageRecognizer(PrometheusInterface prometheus) implements ImageRecognizerInterface {
+  Int cores = 6;
+  Metric completed;
+  {
+    completed = new DiscreteMetric(Pair("comp", "ImageRecognizer"));
+    prometheus!register(list[completed]);
+  }
+  String recognizeImage(ImageRecognizer_LoadBalancerInterface balancer){
+		[Cost: speed_per_core() * time_unit_to_sec() * cores / nth(serviceMCLs(),10)] skip;
+    completed!push(1);
+    balancer!removeMessage();
+    return "";
+  }
+}
+
+
+interface MessageAnalyser_LoadBalancerInterface {
+  Unit connectInstance(MessageAnalyserInterface newInstance);
+  MessageAnalyserInterface disconnectInstance();
+	Unit insertResult(String id, Rat received_at);
+  Unit removeMessage ();
+}
+
+class MessageAnalyser_LoadBalancer(PrometheusInterface prometheus,DBInterface db)  implements MessageAnalyser_LoadBalancerInterface {
+  List<MessageAnalyserInterface> instancesConnected = list[];
+  Int nextInstance = -1;
+  Metric total;
+  Int pending = 0;
+  Metric localLoss;
+  {
+      total = new DiscreteMetric(Pair("tot","MessageAnalyser"));
+      localLoss = new DiscreteMetric(Pair("rej", "MessageAnalyser"));
+      prometheus!register(list[total, localLoss]);        
+  }
+
+  Unit connectInstance(MessageAnalyserInterface newInstance){
+    instancesConnected = appendright(instancesConnected, newInstance);
+  }
+
+  MessageAnalyserInterface disconnectInstance(){
+    MessageAnalyserInterface removedInstance = nth(instancesConnected,length(instancesConnected) - 1);
+    instancesConnected = without(instancesConnected, removedInstance);
+    return removedInstance;
+  }
+
+  Unit insertResult(String id, Rat received_at){
+    total!push(1);
+      //Int n = length(instancesConnected);
+      //Int nextInstance = weightedChoice(n)
+      //MessageAnalyserInterface selectedInstance = nth(instancesConnected, nextInstance);
+
+    if (pending < buffer_size()) {
+      pending = pending + 1;
+      localLoss!push(0);
+      nextInstance = (nextInstance + 1) % length(instancesConnected);  
+      MessageAnalyserInterface selectedInstance = nth(instancesConnected, nextInstance);
+      selectedInstance!insertResult(id,received_at,this);
+    } else {
+      localLoss!push(1);
+      db!removeMessage(id);
+    }
+	}
+
+  Unit removeMessage () {
+    pending = pending - 1;
+  }
+
+}
+
+interface MessageAnalyserInterface {
+    Unit insertResult(String id, Rat received_at, MessageAnalyser_LoadBalancerInterface balancer);
+}
+
+class MessageAnalyser(PrometheusInterface prometheus, DBInterface db) implements MessageAnalyserInterface {
+  Int cores = 1;
+  Metric completed;
+  {
+    completed = new DiscreteMetric(Pair("comp", "MessageAnalyser"));
+    prometheus!register(list[completed]);
+  }
+
+  Unit insertResult(String id,Rat received_at, MessageAnalyser_LoadBalancerInterface balancer){
+    [Cost: speed_per_core() * time_unit_to_sec() * cores / nth(serviceMCLs(),11)] skip;
+    completed!push(1);
+    Rat stop = timeValue(now());
+    balancer!removeMessage();
+    db!insertResult(id,stop - received_at);
+    
+  }
+}

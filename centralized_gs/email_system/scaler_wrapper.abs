@@ -1,0 +1,48 @@
+module Wrapper;
+
+export *;
+import * from ABS.DC;
+import * from Scale1;
+import * from Scale2;
+import * from Scale3;
+import * from Scale4;
+
+
+interface WrapperScaleInterface {
+  List<DeploymentComponent> getDeploymentComponent();
+  Int getDeplTimes();
+	Unit deploy();
+	Unit undeploy();
+}
+
+class WrapperScale(Scale1 s1, Scale2 s2, Scale3 s3, Scale4 s4) implements WrapperScaleInterface{
+
+  Int deplTimes = 0;
+
+  List<DeploymentComponent> getDeploymentComponent(){
+    List<DeploymentComponent> res = Nil;
+    if (s4 != null){res = s4.getDeploymentComponent();}
+    else if(s3 != null) {res = s3.getDeploymentComponent();}
+    else if(s2 != null){res = s2.getDeploymentComponent();}
+    else {res = s1.getDeploymentComponent();}
+    return res;
+  }
+
+  Unit deploy(){
+    if(s4 != null) {s4!deploy();}
+    else if(s3 != null){s3!deploy();}
+    else if(s2 != null){s2!deploy();}
+    else{s1!deploy();}
+    deplTimes = deplTimes + 1;
+  }
+
+  Unit undeploy(){
+    if(s4 != null){s4!undeploy();}
+    else if(s3 != null){s3!undeploy();}
+    else if(s2 != null){s2!undeploy();}
+    else{s1!undeploy();}
+    deplTimes = deplTimes - 1;
+  }
+
+  Int getDeplTimes() {return deplTimes;}
+}

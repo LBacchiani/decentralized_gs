@@ -1,0 +1,445 @@
+module Architecture;
+
+export *;
+import * from ABS.DC;
+import * from ABS.SmartDeploy;
+import * from Prometheus;
+import * from Param;
+import * from Reconfig_Param;
+
+
+[SmartDeployCloudProvider: "{\"c4_large\" : {\"cost\" : 100, \"payment_interval\" : 1, \"resources\" : { \"Cores\" : 2000, \"Memory\" : 375, \"Bandwidth\" : 500, \"Speed\" : 10000, \"Startupduration\" : 30}} , \"c4_xlarge\" : { \"cost\" : 199, \"payment_interval\" : 1, \"resources\" : { \"Cores\" : 4000, \"Memory\" : 750, \"Bandwidth\" : 750, \"Speed\" : 20000, \"Startupduration\" : 30}} , \"c4_2xlarge\" : { \"cost\" : 398, \"payment_interval\" : 1, \"resources\" : { \"Cores\" : 8000, \"Memory\" : 1500, \"Bandwidth\" : 1000, \"Speed\" : 40000, \"Startupduration\" : 30}}, \"c4_4xlarge\" : { \"cost\" : 796, \"payment_interval\" : 1, \"resources\" : { \"Cores\" : 16000, \"Memory\" : 3000, \"Bandwidth\" : 2000, \"Speed\" : 80000, \"Startupduration\" : 30}}}"]
+
+///////SETUP///////
+[SmartDeploy : "{\"id\" : \"Setup\", \"specification\" : \"WebUILoadBalancer = 1 and AuthLoadBalancer = 1 and PersistenceLoadBalancer = 1 and ImageLoadBalancer = 1 and RecommenderLoadBalancer = 1 and WebUI = 1 and Persistence = 1 and Auth = 1 and Image = 2 and Recommender = 1 and forall ?x in DC: (?x.AuthLoadBalancer + ?x.PersistenceLoadBalancer + ?x.WebUILoadBalancer + ?x.ImageLoadBalancer + ?x.RecommenderLoadBalancer > 0 impl (sum ?y in obj: ?x.?y) = 1)\", \"DC\":[ ], \"obj\":[{\"name\":\"prometheus\",\"interface\":\"PrometheusInterface\",\"provides\":[{\"ports\":[\"PrometheusInterface\"],\"num\":-1}],\"methods\" : []} ], \"cloud_provider_DC_availability\":{ \"c4_large\":40, \"c4_xlarge\":40, \"c4_2xlarge\":40, \"c4_4xlarge\": 40}, \"bind preferences\":[ \"local\",  \"sum ?x of type Auth in '.*' : forall ?y of type AuthLoadBalancer in '.*' : ?x used by ?y\",\"sum ?x of type WebUI in '.*' : forall ?y of type WebUILoadBalancer in '.*' : ?x used by ?y\", \"sum ?x of type Persistence in '.*' : forall ?y of type PersistenceLoadBalancer in '.*' : ?x used by ?y\", \"sum ?x of type Image in '.*' : forall ?y of type ImageLoadBalancer in '.*' : ?x used by ?y\", \"sum ?x of type Recommender in '.*' : forall ?y of type RecommenderLoadBalancer in '.*' : ?x used by ?y\"], \"add_method_priorities\":[], \"remove_method_priorities\":[] }" ]
+///////SETUP///////
+
+////////////////////////////////////SCALE 1 ANNOTATION////////////////////////////////////
+
+// [ SmartDeploy : "{\"id\":\"Scale1\",\"specification\":\"WebUI = 2 and Auth = 1 and Persistence = 1 and Image = 2\",\"DC\":[], \"obj\":[{\"name\":\"authLB\",\"interface\":\"AuthLoadBalancerInterface\",\"provides\":[{\"ports\":[\"AuthLoadBalancerInterface\"],\"num\":-1}],\"methods\" : [{\"add\" : { \"name\": \"connectInstance\", \"param_type\": \"AuthInterface\" },\"remove\" : { \"name\": \"disconnectInstance\", \"return_type\" : \"AuthInterface\"}}]},{\"name\":\"webUILB\",\"interface\":\"WebUILoadBalancerInterface\",\"provides\":[{\"ports\":[\"WebUILoadBalancerInterface\"],\"num\":-1}],\"methods\" : [{\"add\" : { \"name\": \"connectInstance\", \"param_type\": \"WebUIInterface\" },\"remove\" : { \"name\": \"disconnectInstance\", \"return_type\" : \"WebUIInterface\"}}]}, {\"name\":\"persistenceLB\",\"interface\":\"PersistenceLoadBalancerInterface\",\"provides\":[{\"ports\":[\"PersistenceLoadBalancerInterface\"],\"num\":-1}],\"methods\" : [{\"add\" : { \"name\": \"connectInstance\", \"param_type\": \"PersistenceInterface\" },\"remove\" : { \"name\": \"disconnectInstance\", \"return_type\" : \"PersistenceInterface\"}}]}, {\"name\":\"imageLB\",\"interface\":\"ImageLoadBalancerInterface\",\"provides\":[{\"ports\":[\"ImageLoadBalancerInterface\"],\"num\":-1}],\"methods\" : [{\"add\" : { \"name\": \"connectInstance\", \"param_type\": \"ImageInterface\" },\"remove\" : { \"name\": \"disconnectInstance\", \"return_type\" : \"ImageInterface\"}}]}, {\"name\":\"prometheus\",\"interface\":\"PrometheusInterface\",\"provides\":[{\"ports\":[\"PrometheusInterface\"],\"num\":-1}],\"methods\" : []}, {\"name\":\"recommenderLB\",\"interface\":\"RecommenderLoadBalancerInterface\",\"provides\":[{\"ports\":[\"RecommenderLoadBalancerInterface\"],\"num\":-1}],\"methods\" : [{\"add\" : { \"name\": \"connectInstance\", \"param_type\": \"RecommenderInterface\" },\"remove\" : { \"name\": \"disconnectInstance\", \"return_type\" : \"RecommenderInterface\"}}]}], \"cloud_provider_DC_availability\":{ \"c4_large\":40, \"c4_xlarge\":40, \"c4_2xlarge\":40, \"c4_4xlarge\":40 }, \"bind preferences\":[ \"local\",  \"sum ?x of type Auth in '.*' : forall ?y of type authLB in '.*' : ?x used by ?y\",\"sum ?x of type WebUI in '.*' : forall ?y of type webUILB in '.*' : ?x used by ?y\", \"sum ?x of type Persistence in '.*' : forall ?y of type persistenceLB in '.*' : ?x used by ?y\", \"sum ?x of type Image in '.*' : forall ?y of type imageLB in '.*' : ?x used by ?y\"], \"add_method_priorities\":[], \"remove_method_priorities\":[] }"]
+
+////////////////////////////////////SCALE 2 ANNOTATION////////////////////////////////////
+
+// [ SmartDeploy : "{\"id\":\"Scale2\",\"specification\":\"WebUI = 1 and Auth = 1 and Persistence = 1 and Image = 2\",\"DC\":[], \"obj\":[{\"name\":\"authLB\",\"interface\":\"AuthLoadBalancerInterface\",\"provides\":[{\"ports\":[\"AuthLoadBalancerInterface\"],\"num\":-1}],\"methods\" : [{\"add\" : { \"name\": \"connectInstance\", \"param_type\": \"AuthInterface\" },\"remove\" : { \"name\": \"disconnectInstance\", \"return_type\" : \"AuthInterface\"}}]},{\"name\":\"webUILB\",\"interface\":\"WebUILoadBalancerInterface\",\"provides\":[{\"ports\":[\"WebUILoadBalancerInterface\"],\"num\":-1}],\"methods\" : [{\"add\" : { \"name\": \"connectInstance\", \"param_type\": \"WebUIInterface\" },\"remove\" : { \"name\": \"disconnectInstance\", \"return_type\" : \"WebUIInterface\"}}]}, {\"name\":\"persistenceLB\",\"interface\":\"PersistenceLoadBalancerInterface\",\"provides\":[{\"ports\":[\"PersistenceLoadBalancerInterface\"],\"num\":-1}],\"methods\" : [{\"add\" : { \"name\": \"connectInstance\", \"param_type\": \"PersistenceInterface\" },\"remove\" : { \"name\": \"disconnectInstance\", \"return_type\" : \"PersistenceInterface\"}}]}, {\"name\":\"imageLB\",\"interface\":\"ImageLoadBalancerInterface\",\"provides\":[{\"ports\":[\"ImageLoadBalancerInterface\"],\"num\":-1}],\"methods\" : [{\"add\" : { \"name\": \"connectInstance\", \"param_type\": \"ImageInterface\" },\"remove\" : { \"name\": \"disconnectInstance\", \"return_type\" : \"ImageInterface\"}}]}, {\"name\":\"prometheus\",\"interface\":\"PrometheusInterface\",\"provides\":[{\"ports\":[\"PrometheusInterface\"],\"num\":-1}],\"methods\" : []}, {\"name\":\"recommenderLB\",\"interface\":\"RecommenderLoadBalancerInterface\",\"provides\":[{\"ports\":[\"RecommenderLoadBalancerInterface\"],\"num\":-1}],\"methods\" : [{\"add\" : { \"name\": \"connectInstance\", \"param_type\": \"RecommenderInterface\" },\"remove\" : { \"name\": \"disconnectInstance\", \"return_type\" : \"RecommenderInterface\"}}]}], \"cloud_provider_DC_availability\":{ \"c4_large\":40, \"c4_xlarge\":40, \"c4_2xlarge\":40, \"c4_4xlarge\":40 }, \"bind preferences\":[ \"local\",  \"sum ?x of type Auth in '.*' : forall ?y of type authLB in '.*' : ?x used by ?y\",\"sum ?x of type WebUI in '.*' : forall ?y of type webUILB in '.*' : ?x used by ?y\", \"sum ?x of type Persistence in '.*' : forall ?y of type persistenceLB in '.*' : ?x used by ?y\", \"sum ?x of type Image in '.*' : forall ?y of type imageLB in '.*' : ?x used by ?y\"], \"add_method_priorities\":[], \"remove_method_priorities\":[] }"]
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+///////DEPLOYMENTS///////
+
+
+data Result = Success | Failure;
+
+////////////////////////////////////////SERVICES////////////////////////////////////////////////////////////
+
+interface WebUILoadBalancerInterface {
+    Unit connectInstance(WebUIInterface newInstance);
+    WebUIInterface disconnectInstance();
+    Maybe<Fut<Result>> request();
+    Unit removeMessage();
+    Unit addLoss();
+}
+
+[SmartDeployCost : "{\"class\" : \"WebUILoadBalancer\",\"scenarios\" : [{\"name\" : \"default\",\"provide\" : -1,\"cost\" : {\"Cores\" : 100,\"Memory\" : 100},\"sig\" : [{\"kind\" : \"require\",\"type\" : \"PrometheusInterface\"}],\"methods\" : [{\"add\" : {\"name\" : \"connectInstance\",\"param_type\" : \"WebUIInterface\"},\"remove\" : {\"name\" : \"disconnectInstance\", \"return_type\": \"WebUIInterface\"}}]}]}"]
+class WebUILoadBalancer(PrometheusInterface prometheus) implements WebUILoadBalancerInterface {
+    List<WebUIInterface> instancesConnected = list[];
+    Int pending = 0;
+    Int nextInstance = -1;
+    Metric total;
+    Metric loss;
+    Metric globalTotal;
+    Metric lossLocal;
+    {
+        total = new local DiscreteMetric(Pair("tot","WebUI"));
+        lossLocal = new local DiscreteMetric(Pair("rej","WebUI"));
+        loss = new local DiscreteMetric(Pair("rej",global_service_name()));
+        globalTotal = new local DiscreteMetric(Pair("tot",global_service_name()));
+        prometheus!register(list[total,loss,globalTotal,lossLocal]);
+    }
+
+
+    Unit connectInstance(WebUIInterface newInstance){
+        instancesConnected = appendright(instancesConnected, newInstance);
+    }
+
+    WebUIInterface disconnectInstance(){
+        WebUIInterface removedInstance = nth(instancesConnected, length(instancesConnected)-1);
+        instancesConnected = without(instancesConnected, removedInstance);
+        return removedInstance;
+    }
+
+     Maybe<Fut<Result>> request() {
+        Maybe<Fut<Result>> res = Nothing;
+        globalTotal.push(1);
+        total.push(1);
+        if(pending < buffer_size()) {
+            nextInstance = (nextInstance + 1) % length(instancesConnected);
+            WebUIInterface selectedInstance = nth(instancesConnected, nextInstance);
+            pending = pending + 1;
+            Rat start = timeValue(now());
+            Fut<Result> result = selectedInstance!request(this, start);
+            res = Just(result);
+        } else {
+            loss.push(1);
+            lossLocal.push(1);
+        }
+        return res;
+    }
+
+    Unit addLoss() {loss.push(1);}
+
+    Unit removeMessage() {pending = pending - 1;}
+}
+
+interface WebUIInterface {
+    Result request(WebUILoadBalancerInterface balancer, Rat start);
+}
+
+[SmartDeployCost : "{\"class\" : \"WebUI\",\"scenarios\" : [{\"name\" : \"default\",\"provide\" : -1,\"cost\" : {\"Cores\" : 1200, \"Memory\" : 512},\"sig\" : [{\"kind\" : \"require\",\"type\" : \"PrometheusInterface\"}, {\"kind\" : \"require\",\"type\" : \"PersistenceLoadBalancerInterface\"}, {\"kind\" : \"require\",\"type\" : \"AuthLoadBalancerInterface\"}, {\"kind\" : \"require\",\"type\" : \"ImageLoadBalancerInterface\"}, {\"kind\" : \"require\",\"type\" : \"RecommenderLoadBalancerInterface\"}],\"methods\" : []}]}"]
+class WebUI(PrometheusInterface prometheus, PersistenceLoadBalancerInterface persistence, AuthLoadBalancerInterface auth, ImageLoadBalancerInterface image, RecommenderLoadBalancerInterface recommender) implements WebUIInterface {
+    Metric completed;
+    Metric globalLatency;
+    Metric globalCompleted;
+    {
+        completed = new local DiscreteMetric(Pair("comp","WebUI"));
+        globalCompleted = new local DiscreteMetric(Pair("comp", global_service_name()));
+        globalLatency = new local DiscreteMetric(Pair("latency", global_service_name()));
+        prometheus!register(list[completed,globalCompleted,globalLatency]);        
+    }
+
+    Result unfoldOptional(Maybe<Fut<Result>> result) {
+        Result res = Failure;
+        switch(result) {
+            Just(fut) => {
+                await fut?;
+                res = fut.get;
+            }
+            _ => skip;
+        }
+        return res;
+    }
+
+    
+    Result request(WebUILoadBalancerInterface balancer, Rat start) {
+        [Cost: speed_per_core() * time_unit_to_sec() * webUICores() / nth(serviceMCLs(),0)] skip;
+        Rat stop = timeValue(now());
+        //latency.push(stop - start);
+        completed.push(1);
+        balancer.removeMessage();
+        Int n = 1 + random(5);
+        Maybe<Fut<Result>> result = await auth!request();
+        Result res = this.unfoldOptional(result);
+        while(n > 0 && res != Failure) {
+            ////START//////
+            result = await persistence!request();
+            res = this.unfoldOptional(result);
+            if (res == Failure) n = 0;
+            else {
+                result = await recommender!request();
+                res = this.unfoldOptional(result);
+                if (res == Failure) n = 0;
+                else {
+                    result = await image!request();
+                    res = this.unfoldOptional(result);
+                    if (res == Failure) n = 0;
+                    else {
+                        result = await image!request();
+                        res = this.unfoldOptional(result);
+                        if (res == Failure) n = 0;
+                    }
+                }
+            }
+            n = n - 1;
+        }
+        if (res != Failure) {
+            stop = timeValue(now());
+            globalCompleted.push(1);
+            globalLatency.push(stop - start);
+        } else {
+            balancer!addLoss();
+        }
+        return res;
+    }
+}
+
+////
+
+interface PersistenceLoadBalancerInterface {
+    Unit connectInstance(PersistenceInterface newInstance);
+    PersistenceInterface disconnectInstance();
+    Maybe<Fut<Result>> request();
+    Unit removeMessage();
+}
+
+[SmartDeployCost : "{\"class\" : \"PersistenceLoadBalancer\",\"scenarios\" : [{\"name\" : \"default\",\"provide\" : -1,\"cost\" : {\"Cores\" : 100,\"Memory\" : 100},\"sig\" : [{\"kind\" : \"require\",\"type\" : \"PrometheusInterface\"}],\"methods\" : [{\"add\" : {\"name\" : \"connectInstance\",\"param_type\" : \"PersistenceInterface\"},\"remove\" : {\"name\" : \"disconnectInstance\", \"return_type\": \"PersistenceInterface\"}}]}]}"]
+class PersistenceLoadBalancer(PrometheusInterface prometheus) implements PersistenceLoadBalancerInterface {
+    List<PersistenceInterface> instancesConnected = list[];
+    Int pending = 0;
+    Int nextInstance = -1;
+    Metric total;
+    Metric lossLocal;
+    {
+        lossLocal = new local DiscreteMetric(Pair("rej","Persistence"));
+        total = new local DiscreteMetric(Pair("tot","Persistence"));
+        prometheus!register(list[total,lossLocal]);
+    }
+
+    Unit connectInstance(PersistenceInterface newInstance){
+        instancesConnected = appendright(instancesConnected, newInstance);
+    }
+
+    PersistenceInterface disconnectInstance(){
+        PersistenceInterface removedInstance = nth(instancesConnected, length(instancesConnected)-1);
+        instancesConnected = without(instancesConnected, removedInstance);
+        return removedInstance;
+    }
+
+     Maybe<Fut<Result>> request() {
+        Maybe<Fut<Result>> res = Nothing;
+        total.push(1);
+        if(pending < buffer_size()) {
+            nextInstance = (nextInstance + 1) % length(instancesConnected);
+            PersistenceInterface selectedInstance = nth(instancesConnected, nextInstance);
+            pending = pending + 1;
+            Rat start = timeValue(now());
+            Fut<Result> req = selectedInstance!request(this, start);
+            res = Just(req);
+        } else {
+            lossLocal.push(1);
+        }
+        return res;
+    }
+
+    Unit removeMessage() {pending = pending - 1;}
+}
+
+interface PersistenceInterface {
+    Result request(PersistenceLoadBalancerInterface balancer, Rat start);
+}
+
+[SmartDeployCost : "{\"class\" : \"Persistence\",\"scenarios\" : [{\"name\" : \"default\",\"provide\" : -1,\"cost\" : {\"Cores\" : 900, \"Memory\" : 412},\"sig\" : [{\"kind\" : \"require\",\"type\" : \"PrometheusInterface\"}],\"methods\" : []}]}"]
+class Persistence(PrometheusInterface prometheus) implements PersistenceInterface {
+    Metric completed;
+    {
+        completed = new local DiscreteMetric(Pair("comp","Persistence"));
+        prometheus!register(list[completed]);
+    }
+    Result request(PersistenceLoadBalancerInterface balancer, Rat start) {
+        [Cost: speed_per_core() * time_unit_to_sec() * persistenceCores() / nth(serviceMCLs(),1)] skip;
+        Rat stop = timeValue(now());
+        completed.push(1);
+        balancer.removeMessage();
+        return Success;
+    }
+}
+
+////
+
+interface AuthLoadBalancerInterface {
+    Unit connectInstance(AuthInterface newInstance);
+    AuthInterface disconnectInstance();
+    Maybe<Fut<Result>> request();
+    Unit removeMessage();
+}
+
+[SmartDeployCost : "{\"class\" : \"AuthLoadBalancer\",\"scenarios\" : [{\"name\" : \"default\",\"provide\" : -1,\"cost\" : {\"Cores\" : 100,\"Memory\" : 100},\"sig\" : [{\"kind\" : \"require\",\"type\" : \"PrometheusInterface\"}],\"methods\" : [{\"add\" : {\"name\" : \"connectInstance\",\"param_type\" : \"AuthInterface\"},\"remove\" : {\"name\" : \"disconnectInstance\", \"return_type\": \"AuthInterface\"}}]}]}"]
+class AuthLoadBalancer(PrometheusInterface prometheus) implements AuthLoadBalancerInterface {
+    List<AuthInterface> instancesConnected = list[];
+    Int pending = 0;
+    Int nextInstance = -1;
+    Metric total;
+    Metric lossLocal;
+    {
+        lossLocal = new local DiscreteMetric(Pair("rej","Auth"));
+        total = new local DiscreteMetric(Pair("tot","Auth"));
+        prometheus!register(list[total,lossLocal]);
+    }
+
+    Unit connectInstance(AuthInterface newInstance){
+        instancesConnected = appendright(instancesConnected, newInstance);
+    }
+
+    AuthInterface disconnectInstance(){
+        AuthInterface removedInstance = nth(instancesConnected, length(instancesConnected)-1);
+        instancesConnected = without(instancesConnected, removedInstance);
+        return removedInstance;
+    }
+
+     Maybe<Fut<Result>> request() {
+        Maybe<Fut<Result>> res = Nothing;
+        total.push(1);
+        if(pending < buffer_size()) {
+            nextInstance = (nextInstance + 1) % length(instancesConnected);
+            AuthInterface selectedInstance = nth(instancesConnected, nextInstance);
+            pending = pending + 1;
+            Rat start = timeValue(now());
+            Fut<Result> req = selectedInstance!request(this, start);
+            res = Just(req);
+        } else {
+            lossLocal.push(1);
+        }
+        return res;
+    }
+
+    Unit removeMessage() {pending = pending - 1;}
+}
+
+interface AuthInterface {
+    Result request(AuthLoadBalancerInterface balancer, Rat start);
+}
+
+[SmartDeployCost : "{\"class\" : \"Auth\",\"scenarios\" : [{\"name\" : \"default\",\"provide\" : -1,\"cost\" : {\"Cores\" : 900, \"Memory\" : 512},\"sig\" : [{\"kind\" : \"require\",\"type\" : \"PrometheusInterface\"},{\"kind\" : \"require\",\"type\" : \"PersistenceLoadBalancerInterface\"}],\"methods\" : []}]}"]
+class Auth(PrometheusInterface prometheus, PersistenceLoadBalancerInterface persistence) implements AuthInterface {
+    Metric completed;
+    {
+        completed = new local DiscreteMetric(Pair("comp","Auth"));
+       prometheus!register(list[completed]);
+    }
+    Result request(AuthLoadBalancerInterface balancer, Rat start) {
+        [Cost: speed_per_core() * time_unit_to_sec() * authCores() / nth(serviceMCLs(),2)] skip;
+        Rat stop = timeValue(now());
+        completed.push(1);
+        balancer.removeMessage();
+        Result res = Failure;
+        Maybe<Fut<Result>> req = await persistence!request();
+        switch(req) {
+            Just(fut) => {
+                await fut?;
+                res = fut.get;
+            }
+            _ => skip;
+        }
+        return res;
+    }
+}
+
+//////
+
+interface ImageLoadBalancerInterface {
+    Unit connectInstance(ImageInterface newInstance);
+    ImageInterface disconnectInstance();
+    Maybe<Fut<Result>> request();
+    Unit removeMessage();
+}
+
+[SmartDeployCost : "{\"class\" : \"ImageLoadBalancer\",\"scenarios\" : [{\"name\" : \"default\",\"provide\" : -1,\"cost\" : {\"Cores\" : 100,\"Memory\" : 100},\"sig\" : [{\"kind\" : \"require\",\"type\" : \"PrometheusInterface\"}],\"methods\" : [{\"add\" : {\"name\" : \"connectInstance\",\"param_type\" : \"ImageInterface\"},\"remove\" : {\"name\" : \"disconnectInstance\", \"return_type\": \"ImageInterface\"}}]}]}"]
+class ImageLoadBalancer(PrometheusInterface prometheus) implements ImageLoadBalancerInterface {
+    List<ImageInterface> instancesConnected = list[];
+    Int pending = 0;
+    Int nextInstance = -1;
+    Metric total;
+    Metric lossLocal;
+
+    {
+        lossLocal = new local DiscreteMetric(Pair("rej","Image"));
+        total = new local DiscreteMetric(Pair("tot","Image"));
+        prometheus!register(list[total,lossLocal]);
+    }
+
+    Unit connectInstance(ImageInterface newInstance){
+        instancesConnected = appendright(instancesConnected, newInstance);
+    }
+
+    ImageInterface disconnectInstance(){
+        ImageInterface removedInstance = nth(instancesConnected, length(instancesConnected)-1);
+        instancesConnected = without(instancesConnected, removedInstance);
+        return removedInstance;
+    }
+
+     Maybe<Fut<Result>> request() {
+        Maybe<Fut<Result>> res = Nothing;
+        total.push(1);
+        if(pending < buffer_size()) {
+            nextInstance = (nextInstance + 1) % length(instancesConnected);
+            ImageInterface selectedInstance = nth(instancesConnected, nextInstance);
+            pending = pending + 1;
+            Rat start = timeValue(now());
+            Fut<Result> req = selectedInstance!request(this, start);
+            res = Just(req);
+        } else {
+            lossLocal.push(1);
+        }
+        return res;
+    }
+
+    Unit removeMessage() {pending = pending - 1;}
+}
+
+interface ImageInterface {
+    Result request(ImageLoadBalancerInterface balancer, Rat start);
+}
+
+[SmartDeployCost : "{\"class\" : \"Image\",\"scenarios\" : [{\"name\" : \"default\",\"provide\" : -1,\"cost\" : {\"Cores\" : 1100, \"Memory\" : 512},\"sig\" : [{\"kind\" : \"require\",\"type\" : \"PrometheusInterface\"}],\"methods\" : []}]}"]
+class Image(PrometheusInterface prometheus) implements ImageInterface {
+    Metric completed;
+    {
+        completed = new local DiscreteMetric(Pair("comp","Image"));
+       prometheus!register(list[completed]);
+    }
+    Result request(ImageLoadBalancerInterface balancer, Rat start) {
+        [Cost: speed_per_core() * time_unit_to_sec() * imageCores() / nth(serviceMCLs(),4)] skip;
+        Rat stop = timeValue(now());
+        completed.push(1);
+        balancer.removeMessage();
+        return Success;
+    }
+}
+
+////
+
+
+interface RecommenderLoadBalancerInterface {
+    Unit connectInstance(RecommenderInterface newInstance);
+    RecommenderInterface disconnectInstance();
+    Maybe<Fut<Result>> request();
+    Unit removeMessage();
+}
+
+[SmartDeployCost : "{\"class\" : \"RecommenderLoadBalancer\",\"scenarios\" : [{\"name\" : \"default\",\"provide\" : -1,\"cost\" : {\"Cores\" : 100,\"Memory\" : 100},\"sig\" : [{\"kind\" : \"require\",\"type\" : \"PrometheusInterface\"}],\"methods\" : [{\"add\" : {\"name\" : \"connectInstance\",\"param_type\" : \"RecommenderInterface\"},\"remove\" : {\"name\" : \"disconnectInstance\", \"return_type\": \"RecommenderInterface\"}}]}]}"]
+class RecommenderLoadBalancer(PrometheusInterface prometheus) implements RecommenderLoadBalancerInterface {
+    List<RecommenderInterface> instancesConnected = list[];
+    // Int pending = 0;
+    Int nextInstance = -1;
+    // Metric total;
+
+    {
+        // total = new local DiscreteMetric(Pair("tot","Recommender"));
+        // prometheus!register(list[total]);
+
+    }
+
+    Unit connectInstance(RecommenderInterface newInstance){
+        instancesConnected = appendright(instancesConnected, newInstance);
+    }
+
+    RecommenderInterface disconnectInstance(){
+        RecommenderInterface removedInstance = nth(instancesConnected, length(instancesConnected)-1);
+        instancesConnected = without(instancesConnected, removedInstance);
+        return removedInstance;
+    }
+
+     Maybe<Fut<Result>> request() {
+        Maybe<Fut<Result>> res = Nothing;
+        // total.push(1);
+        // if(pending < buffer_size()) {
+            nextInstance = (nextInstance + 1) % length(instancesConnected);
+            RecommenderInterface selectedInstance = nth(instancesConnected, nextInstance);
+            // pending = pending + 1;
+            Rat start = timeValue(now());
+            Fut<Result> req = selectedInstance!request(this, start);
+            res = Just(req);
+        // } 
+        return res;
+    }
+
+    Unit removeMessage() {}
+}
+
+interface RecommenderInterface {
+    Result request(RecommenderLoadBalancerInterface balancer, Rat start);
+}
+
+[SmartDeployCost : "{\"class\" : \"Recommender\",\"scenarios\" : [{\"name\" : \"default\",\"provide\" : -1,\"cost\" : {\"Cores\" : 800, \"Memory\" : 512},\"sig\" : [{\"kind\" : \"require\",\"type\" : \"PrometheusInterface\"}],\"methods\" : []}]}"]
+class Recommender(PrometheusInterface prometheus) implements RecommenderInterface {
+    Result request(RecommenderLoadBalancerInterface balancer, Rat start) {
+        return Success;
+    }
+}

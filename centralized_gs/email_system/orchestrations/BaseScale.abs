@@ -1,0 +1,313 @@
+module BaseScale;
+export *;
+import * from ABS.DC;
+import * from Architecture;
+import * from DB;
+
+interface BaseScale{
+	List<MessageReceiverInterface> getMessageReceiverInterface();
+	List<TextAnalyserInterface> getTextAnalyserInterface();
+	List<NSFWDetectorInterface> getNSFWDetectorInterface();
+	List<ImageRecognizerInterface> getImageRecognizerInterface();
+	List<MessageParserInterface> getMessageParserInterface();
+	List<AttachmentsManagerInterface> getAttachmentsManagerInterface();
+	List<ImageAnalyserInterface> getImageAnalyserInterface();
+	List<VirusScannerInterface> getVirusScannerInterface();
+	List<LinkAnalyserInterface> getLinkAnalyserInterface();
+	List<HeaderAnalyserInterface> getHeaderAnalyserInterface();
+	List<MessageAnalyserInterface> getMessageAnalyserInterface();
+	List<SentimentAnalyserInterface> getSentimentAnalyserInterface();
+	List<DeploymentComponent> getDeploymentComponent();
+	Unit deploy();
+	Unit undeploy();
+}
+
+class BaseScale(CloudProvider cloudProvider, MessageReceiver_LoadBalancerInterface messageReceiver_LoadBalancerObj, MessageParser_LoadBalancerInterface messageParser_LoadBalancerObj, HeaderAnalyser_LoadBalancerInterface headerAnalyser_LoadBalancerObj, LinkAnalyser_LoadBalancerInterface linkAnalyser_LoadBalancerObj, TextAnalyser_LoadBalancerInterface textAnalyser_LoadBalancerObj, SentimentAnalyser_LoadBalancerInterface sentimentAnalyser_LoadBalancerObj, VirusScanner_LoadBalancerInterface virusScanner_LoadBalancerObj, AttachmentsManager_LoadBalancerInterface attachmentsManager_LoadBalancerObj, ImageAnalyser_LoadBalancerInterface imageAnalyser_LoadBalancerObj, NSFWDetector_LoadBalancerInterface nsfwDetector_LoadBalancerObj, ImageRecognizer_LoadBalancerInterface imageRecognizer_LoadBalancerObj, MessageAnalyser_LoadBalancerInterface messageAnalyser_LoadBalancerObj, DBInterface dbObj) implements BaseScale{
+
+	List<List<MessageReceiverInterface>> ls_ls_MessageReceiverInterface = Nil;
+	List<MessageReceiverInterface> ls_MessageReceiverInterface = Nil;
+	List<List<TextAnalyserInterface>> ls_ls_TextAnalyserInterface = Nil;
+	List<TextAnalyserInterface> ls_TextAnalyserInterface = Nil;
+	List<List<NSFWDetectorInterface>> ls_ls_NSFWDetectorInterface = Nil;
+	List<NSFWDetectorInterface> ls_NSFWDetectorInterface = Nil;
+	List<List<ImageRecognizerInterface>> ls_ls_ImageRecognizerInterface = Nil;
+	List<ImageRecognizerInterface> ls_ImageRecognizerInterface = Nil;
+	List<List<MessageParserInterface>> ls_ls_MessageParserInterface = Nil;
+	List<MessageParserInterface> ls_MessageParserInterface = Nil;
+	List<List<AttachmentsManagerInterface>> ls_ls_AttachmentsManagerInterface = Nil;
+	List<AttachmentsManagerInterface> ls_AttachmentsManagerInterface = Nil;
+	List<List<ImageAnalyserInterface>> ls_ls_ImageAnalyserInterface = Nil;
+	List<ImageAnalyserInterface> ls_ImageAnalyserInterface = Nil;
+	List<List<VirusScannerInterface>> ls_ls_VirusScannerInterface = Nil;
+	List<VirusScannerInterface> ls_VirusScannerInterface = Nil;
+	List<List<LinkAnalyserInterface>> ls_ls_LinkAnalyserInterface = Nil;
+	List<LinkAnalyserInterface> ls_LinkAnalyserInterface = Nil;
+	List<List<HeaderAnalyserInterface>> ls_ls_HeaderAnalyserInterface = Nil;
+	List<HeaderAnalyserInterface> ls_HeaderAnalyserInterface = Nil;
+	List<List<MessageAnalyserInterface>> ls_ls_MessageAnalyserInterface = Nil;
+	List<MessageAnalyserInterface> ls_MessageAnalyserInterface = Nil;
+	List<List<SentimentAnalyserInterface>> ls_ls_SentimentAnalyserInterface = Nil;
+	List<SentimentAnalyserInterface> ls_SentimentAnalyserInterface = Nil;
+	List<List<DeploymentComponent>> ls_ls_DeploymentComponent = Nil;
+	List<DeploymentComponent> ls_DeploymentComponent = Nil;
+	Rat waiting_time = 1/10;
+	{
+		cloudProvider.addInstanceDescription(Pair("c4_4xlarge",
+			map[Pair(CostPerInterval,796)
+			,Pair(PaymentInterval,1)
+			,Pair(Bandwidth,2000)
+			,Pair(Memory,3000)
+			,Pair(Cores,16)
+			,Pair(Speed,80)
+			]));
+		cloudProvider.addInstanceDescription(Pair("c4_xlarge",
+			map[Pair(CostPerInterval,199)
+			,Pair(PaymentInterval,1)
+			,Pair(Bandwidth,750)
+			,Pair(Memory,750)
+			,Pair(Cores,4)
+			,Pair(Speed,20)
+			]));
+		cloudProvider.addInstanceDescription(Pair("c4_large",
+			map[Pair(CostPerInterval,100)
+			,Pair(PaymentInterval,1)
+			,Pair(Bandwidth,500)
+			,Pair(Memory,375)
+			,Pair(Cores,2)
+			,Pair(Speed,10)
+			]));
+		cloudProvider.addInstanceDescription(Pair("c4_2xlarge",
+			map[Pair(CostPerInterval,398)
+			,Pair(PaymentInterval,1)
+			,Pair(Bandwidth,1000)
+			,Pair(Memory,1500)
+			,Pair(Cores,8)
+			,Pair(Speed,40)
+			]));
+	}
+
+	List<MessageReceiverInterface> getMessageReceiverInterface() { return ls_MessageReceiverInterface; }
+	List<TextAnalyserInterface> getTextAnalyserInterface() { return ls_TextAnalyserInterface; }
+	List<NSFWDetectorInterface> getNSFWDetectorInterface() { return ls_NSFWDetectorInterface; }
+	List<ImageRecognizerInterface> getImageRecognizerInterface() { return ls_ImageRecognizerInterface; }
+	List<MessageParserInterface> getMessageParserInterface() { return ls_MessageParserInterface; }
+	List<AttachmentsManagerInterface> getAttachmentsManagerInterface() { return ls_AttachmentsManagerInterface; }
+	List<ImageAnalyserInterface> getImageAnalyserInterface() { return ls_ImageAnalyserInterface; }
+	List<VirusScannerInterface> getVirusScannerInterface() { return ls_VirusScannerInterface; }
+	List<LinkAnalyserInterface> getLinkAnalyserInterface() { return ls_LinkAnalyserInterface; }
+	List<HeaderAnalyserInterface> getHeaderAnalyserInterface() { return ls_HeaderAnalyserInterface; }
+	List<MessageAnalyserInterface> getMessageAnalyserInterface() { return ls_MessageAnalyserInterface; }
+	List<SentimentAnalyserInterface> getSentimentAnalyserInterface() { return ls_SentimentAnalyserInterface; }
+	List<DeploymentComponent> getDeploymentComponent() { return ls_DeploymentComponent; }
+
+	Unit deploy() {
+		ls_ls_MessageReceiverInterface = Cons(ls_MessageReceiverInterface,ls_ls_MessageReceiverInterface);
+		ls_MessageReceiverInterface = Nil;
+		ls_ls_TextAnalyserInterface = Cons(ls_TextAnalyserInterface,ls_ls_TextAnalyserInterface);
+		ls_TextAnalyserInterface = Nil;
+		ls_ls_NSFWDetectorInterface = Cons(ls_NSFWDetectorInterface,ls_ls_NSFWDetectorInterface);
+		ls_NSFWDetectorInterface = Nil;
+		ls_ls_ImageRecognizerInterface = Cons(ls_ImageRecognizerInterface,ls_ls_ImageRecognizerInterface);
+		ls_ImageRecognizerInterface = Nil;
+		ls_ls_MessageParserInterface = Cons(ls_MessageParserInterface,ls_ls_MessageParserInterface);
+		ls_MessageParserInterface = Nil;
+		ls_ls_AttachmentsManagerInterface = Cons(ls_AttachmentsManagerInterface,ls_ls_AttachmentsManagerInterface);
+		ls_AttachmentsManagerInterface = Nil;
+		ls_ls_ImageAnalyserInterface = Cons(ls_ImageAnalyserInterface,ls_ls_ImageAnalyserInterface);
+		ls_ImageAnalyserInterface = Nil;
+		ls_ls_VirusScannerInterface = Cons(ls_VirusScannerInterface,ls_ls_VirusScannerInterface);
+		ls_VirusScannerInterface = Nil;
+		ls_ls_LinkAnalyserInterface = Cons(ls_LinkAnalyserInterface,ls_ls_LinkAnalyserInterface);
+		ls_LinkAnalyserInterface = Nil;
+		ls_ls_HeaderAnalyserInterface = Cons(ls_HeaderAnalyserInterface,ls_ls_HeaderAnalyserInterface);
+		ls_HeaderAnalyserInterface = Nil;
+		ls_ls_MessageAnalyserInterface = Cons(ls_MessageAnalyserInterface,ls_ls_MessageAnalyserInterface);
+		ls_MessageAnalyserInterface = Nil;
+		ls_ls_SentimentAnalyserInterface = Cons(ls_SentimentAnalyserInterface,ls_ls_SentimentAnalyserInterface);
+		ls_SentimentAnalyserInterface = Nil;
+		ls_ls_DeploymentComponent = Cons(ls_DeploymentComponent,ls_ls_DeploymentComponent);
+		ls_DeploymentComponent = Nil;
+		this.deploy_aux();
+	}
+
+	Unit undeploy() {
+		if (ls_ls_DeploymentComponent != Nil) {
+			this.undeploy_aux();
+			ls_DeploymentComponent = head(ls_ls_DeploymentComponent);
+			ls_ls_DeploymentComponent = tail(ls_ls_DeploymentComponent);
+				ls_MessageReceiverInterface = head(ls_ls_MessageReceiverInterface);
+				ls_TextAnalyserInterface = head(ls_ls_TextAnalyserInterface);
+				ls_NSFWDetectorInterface = head(ls_ls_NSFWDetectorInterface);
+				ls_ImageRecognizerInterface = head(ls_ls_ImageRecognizerInterface);
+				ls_MessageParserInterface = head(ls_ls_MessageParserInterface);
+				ls_AttachmentsManagerInterface = head(ls_ls_AttachmentsManagerInterface);
+				ls_ImageAnalyserInterface = head(ls_ls_ImageAnalyserInterface);
+				ls_VirusScannerInterface = head(ls_ls_VirusScannerInterface);
+				ls_LinkAnalyserInterface = head(ls_ls_LinkAnalyserInterface);
+				ls_HeaderAnalyserInterface = head(ls_ls_HeaderAnalyserInterface);
+				ls_MessageAnalyserInterface = head(ls_ls_MessageAnalyserInterface);
+				ls_SentimentAnalyserInterface = head(ls_ls_SentimentAnalyserInterface);
+			ls_ls_MessageReceiverInterface = tail(ls_ls_MessageReceiverInterface);
+			ls_ls_TextAnalyserInterface = tail(ls_ls_TextAnalyserInterface);
+			ls_ls_NSFWDetectorInterface = tail(ls_ls_NSFWDetectorInterface);
+			ls_ls_ImageRecognizerInterface = tail(ls_ls_ImageRecognizerInterface);
+			ls_ls_MessageParserInterface = tail(ls_ls_MessageParserInterface);
+			ls_ls_AttachmentsManagerInterface = tail(ls_ls_AttachmentsManagerInterface);
+			ls_ls_ImageAnalyserInterface = tail(ls_ls_ImageAnalyserInterface);
+			ls_ls_VirusScannerInterface = tail(ls_ls_VirusScannerInterface);
+			ls_ls_LinkAnalyserInterface = tail(ls_ls_LinkAnalyserInterface);
+			ls_ls_HeaderAnalyserInterface = tail(ls_ls_HeaderAnalyserInterface);
+			ls_ls_MessageAnalyserInterface = tail(ls_ls_MessageAnalyserInterface);
+			ls_ls_SentimentAnalyserInterface = tail(ls_ls_SentimentAnalyserInterface);
+		}
+	}
+
+
+	Unit deploy_aux() {
+		Map<DeploymentComponent,Rat> speedPatchMap = map[];
+		DeploymentComponent c4_xlarge_1 = cloudProvider.launchInstanceNamed("c4_xlarge");
+		ls_DeploymentComponent = Cons(c4_xlarge_1,ls_DeploymentComponent);
+		speedPatchMap = put(speedPatchMap,c4_xlarge_1,0);
+		DeploymentComponent c4_xlarge_0 = cloudProvider.launchInstanceNamed("c4_xlarge");
+		ls_DeploymentComponent = Cons(c4_xlarge_0,ls_DeploymentComponent);
+		speedPatchMap = put(speedPatchMap,c4_xlarge_0,0);
+		DeploymentComponent c4_xlarge_2 = cloudProvider.launchInstanceNamed("c4_xlarge");
+		ls_DeploymentComponent = Cons(c4_xlarge_2,ls_DeploymentComponent);
+		speedPatchMap = put(speedPatchMap,c4_xlarge_2,0);
+		DeploymentComponent c4_large_1 = cloudProvider.launchInstanceNamed("c4_large");
+		ls_DeploymentComponent = Cons(c4_large_1,ls_DeploymentComponent);
+		speedPatchMap = put(speedPatchMap,c4_large_1,0);
+		DeploymentComponent c4_large_0 = cloudProvider.launchInstanceNamed("c4_large");
+		ls_DeploymentComponent = Cons(c4_large_0,ls_DeploymentComponent);
+		speedPatchMap = put(speedPatchMap,c4_large_0,0);
+		DeploymentComponent c4_large_3 = cloudProvider.launchInstanceNamed("c4_large");
+		ls_DeploymentComponent = Cons(c4_large_3,ls_DeploymentComponent);
+		speedPatchMap = put(speedPatchMap,c4_large_3,0);
+		DeploymentComponent c4_large_2 = cloudProvider.launchInstanceNamed("c4_large");
+		ls_DeploymentComponent = Cons(c4_large_2,ls_DeploymentComponent);
+		speedPatchMap = put(speedPatchMap,c4_large_2,0);
+		DeploymentComponent c4_2xlarge_1 = cloudProvider.launchInstanceNamed("c4_2xlarge");
+		ls_DeploymentComponent = Cons(c4_2xlarge_1,ls_DeploymentComponent);
+		speedPatchMap = put(speedPatchMap,c4_2xlarge_1,0);
+		DeploymentComponent c4_2xlarge_0 = cloudProvider.launchInstanceNamed("c4_2xlarge");
+		ls_DeploymentComponent = Cons(c4_2xlarge_0,ls_DeploymentComponent);
+		speedPatchMap = put(speedPatchMap,c4_2xlarge_0,0);
+		[DC: c4_xlarge_0] SentimentAnalyserInterface odefault___SentimentAnalyser_0_c4_xlarge_0 = new SentimentAnalyser();
+		Rat coreRequired_odefault___SentimentAnalyser_0_c4_xlarge_0 = 4;
+		speedPatchMap = put(speedPatchMap, c4_xlarge_0, fromJust(lookup(speedPatchMap,c4_xlarge_0)) + coreRequired_odefault___SentimentAnalyser_0_c4_xlarge_0);
+		ls_SentimentAnalyserInterface = Cons(odefault___SentimentAnalyser_0_c4_xlarge_0, ls_SentimentAnalyserInterface);
+		[DC: c4_2xlarge_0] ImageRecognizerInterface odefault___ImageRecognizer_0_c4_2xlarge_0 = new ImageRecognizer();
+		Rat coreRequired_odefault___ImageRecognizer_0_c4_2xlarge_0 = 6;
+		speedPatchMap = put(speedPatchMap, c4_2xlarge_0, fromJust(lookup(speedPatchMap,c4_2xlarge_0)) + coreRequired_odefault___ImageRecognizer_0_c4_2xlarge_0);
+		ls_ImageRecognizerInterface = Cons(odefault___ImageRecognizer_0_c4_2xlarge_0, ls_ImageRecognizerInterface);
+		[DC: c4_2xlarge_1] NSFWDetectorInterface odefault___NSFWDetector_0_c4_2xlarge_1 = new NSFWDetector();
+		Rat coreRequired_odefault___NSFWDetector_0_c4_2xlarge_1 = 6;
+		speedPatchMap = put(speedPatchMap, c4_2xlarge_1, fromJust(lookup(speedPatchMap,c4_2xlarge_1)) + coreRequired_odefault___NSFWDetector_0_c4_2xlarge_1);
+		ls_NSFWDetectorInterface = Cons(odefault___NSFWDetector_0_c4_2xlarge_1, ls_NSFWDetectorInterface);
+		[DC: c4_xlarge_1] SentimentAnalyserInterface odefault___SentimentAnalyser_0_c4_xlarge_1 = new SentimentAnalyser();
+		Rat coreRequired_odefault___SentimentAnalyser_0_c4_xlarge_1 = 4;
+		speedPatchMap = put(speedPatchMap, c4_xlarge_1, fromJust(lookup(speedPatchMap,c4_xlarge_1)) + coreRequired_odefault___SentimentAnalyser_0_c4_xlarge_1);
+		ls_SentimentAnalyserInterface = Cons(odefault___SentimentAnalyser_0_c4_xlarge_1, ls_SentimentAnalyserInterface);
+		[DC: c4_2xlarge_0] MessageAnalyserInterface odefault___MessageAnalyser_0_c4_2xlarge_0 = new MessageAnalyser(dbObj);
+		Rat coreRequired_odefault___MessageAnalyser_0_c4_2xlarge_0 = 1;
+		speedPatchMap = put(speedPatchMap, c4_2xlarge_0, fromJust(lookup(speedPatchMap,c4_2xlarge_0)) + coreRequired_odefault___MessageAnalyser_0_c4_2xlarge_0);
+		ls_MessageAnalyserInterface = Cons(odefault___MessageAnalyser_0_c4_2xlarge_0, ls_MessageAnalyserInterface);
+		[DC: c4_large_3] LinkAnalyserInterface odefault___LinkAnalyser_0_c4_large_3 = new LinkAnalyser(messageAnalyser_LoadBalancerObj);
+		Rat coreRequired_odefault___LinkAnalyser_0_c4_large_3 = 2;
+		speedPatchMap = put(speedPatchMap, c4_large_3, fromJust(lookup(speedPatchMap,c4_large_3)) + coreRequired_odefault___LinkAnalyser_0_c4_large_3);
+		ls_LinkAnalyserInterface = Cons(odefault___LinkAnalyser_0_c4_large_3, ls_LinkAnalyserInterface);
+		[DC: c4_2xlarge_0] ImageAnalyserInterface odefault___ImageAnalyser_0_c4_2xlarge_0 = new ImageAnalyser(nsfwDetector_LoadBalancerObj, imageRecognizer_LoadBalancerObj, messageAnalyser_LoadBalancerObj);
+		Rat coreRequired_odefault___ImageAnalyser_0_c4_2xlarge_0 = 1;
+		speedPatchMap = put(speedPatchMap, c4_2xlarge_0, fromJust(lookup(speedPatchMap,c4_2xlarge_0)) + coreRequired_odefault___ImageAnalyser_0_c4_2xlarge_0);
+		ls_ImageAnalyserInterface = Cons(odefault___ImageAnalyser_0_c4_2xlarge_0, ls_ImageAnalyserInterface);
+		[DC: c4_large_1] HeaderAnalyserInterface odefault___HeaderAnalyser_0_c4_large_1 = new HeaderAnalyser(messageAnalyser_LoadBalancerObj);
+		Rat coreRequired_odefault___HeaderAnalyser_0_c4_large_1 = 2;
+		speedPatchMap = put(speedPatchMap, c4_large_1, fromJust(lookup(speedPatchMap,c4_large_1)) + coreRequired_odefault___HeaderAnalyser_0_c4_large_1);
+		ls_HeaderAnalyserInterface = Cons(odefault___HeaderAnalyser_0_c4_large_1, ls_HeaderAnalyserInterface);
+		[DC: c4_large_2] TextAnalyserInterface odefault___TextAnalyser_0_c4_large_2 = new TextAnalyser(sentimentAnalyser_LoadBalancerObj, messageAnalyser_LoadBalancerObj);
+		Rat coreRequired_odefault___TextAnalyser_0_c4_large_2 = 2;
+		speedPatchMap = put(speedPatchMap, c4_large_2, fromJust(lookup(speedPatchMap,c4_large_2)) + coreRequired_odefault___TextAnalyser_0_c4_large_2);
+		ls_TextAnalyserInterface = Cons(odefault___TextAnalyser_0_c4_large_2, ls_TextAnalyserInterface);
+		[DC: c4_large_0] AttachmentsManagerInterface odefault___AttachmentsManager_0_c4_large_0 = new AttachmentsManager(imageAnalyser_LoadBalancerObj);
+		Rat coreRequired_odefault___AttachmentsManager_0_c4_large_0 = 1;
+		speedPatchMap = put(speedPatchMap, c4_large_0, fromJust(lookup(speedPatchMap,c4_large_0)) + coreRequired_odefault___AttachmentsManager_0_c4_large_0);
+		ls_AttachmentsManagerInterface = Cons(odefault___AttachmentsManager_0_c4_large_0, ls_AttachmentsManagerInterface);
+		[DC: c4_xlarge_2] VirusScannerInterface odefault___VirusScanner_0_c4_xlarge_2 = new VirusScanner(attachmentsManager_LoadBalancerObj, messageAnalyser_LoadBalancerObj);
+		Rat coreRequired_odefault___VirusScanner_0_c4_xlarge_2 = 4;
+		speedPatchMap = put(speedPatchMap, c4_xlarge_2, fromJust(lookup(speedPatchMap,c4_xlarge_2)) + coreRequired_odefault___VirusScanner_0_c4_xlarge_2);
+		ls_VirusScannerInterface = Cons(odefault___VirusScanner_0_c4_xlarge_2, ls_VirusScannerInterface);
+		[DC: c4_2xlarge_1] MessageParserInterface odefault___MessageParser_0_c4_2xlarge_1 = new MessageParser(headerAnalyser_LoadBalancerObj, linkAnalyser_LoadBalancerObj, textAnalyser_LoadBalancerObj, virusScanner_LoadBalancerObj, messageAnalyser_LoadBalancerObj, dbObj);
+		Rat coreRequired_odefault___MessageParser_0_c4_2xlarge_1 = 1;
+		speedPatchMap = put(speedPatchMap, c4_2xlarge_1, fromJust(lookup(speedPatchMap,c4_2xlarge_1)) + coreRequired_odefault___MessageParser_0_c4_2xlarge_1);
+		ls_MessageParserInterface = Cons(odefault___MessageParser_0_c4_2xlarge_1, ls_MessageParserInterface);
+		[DC: c4_large_0] MessageReceiverInterface odefault___MessageReceiver_0_c4_large_0 = new MessageReceiver(messageParser_LoadBalancerObj);
+		Rat coreRequired_odefault___MessageReceiver_0_c4_large_0 = 1;
+		speedPatchMap = put(speedPatchMap, c4_large_0, fromJust(lookup(speedPatchMap,c4_large_0)) + coreRequired_odefault___MessageReceiver_0_c4_large_0);
+		ls_MessageReceiverInterface = Cons(odefault___MessageReceiver_0_c4_large_0, ls_MessageReceiverInterface);
+		this!patchSpeed(speedPatchMap);
+		await duration(waiting_time,waiting_time);
+		imageRecognizer_LoadBalancerObj.connectInstance(odefault___ImageRecognizer_0_c4_2xlarge_0);
+		sentimentAnalyser_LoadBalancerObj.connectInstance(odefault___SentimentAnalyser_0_c4_xlarge_1);
+		sentimentAnalyser_LoadBalancerObj.connectInstance(odefault___SentimentAnalyser_0_c4_xlarge_0);
+		nsfwDetector_LoadBalancerObj.connectInstance(odefault___NSFWDetector_0_c4_2xlarge_1);
+		messageAnalyser_LoadBalancerObj.connectInstance(odefault___MessageAnalyser_0_c4_2xlarge_0);
+		headerAnalyser_LoadBalancerObj.connectInstance(odefault___HeaderAnalyser_0_c4_large_1);
+		imageAnalyser_LoadBalancerObj.connectInstance(odefault___ImageAnalyser_0_c4_2xlarge_0);
+		textAnalyser_LoadBalancerObj.connectInstance(odefault___TextAnalyser_0_c4_large_2);
+		linkAnalyser_LoadBalancerObj.connectInstance(odefault___LinkAnalyser_0_c4_large_3);
+		attachmentsManager_LoadBalancerObj.connectInstance(odefault___AttachmentsManager_0_c4_large_0);
+		virusScanner_LoadBalancerObj.connectInstance(odefault___VirusScanner_0_c4_xlarge_2);
+		messageParser_LoadBalancerObj.connectInstance(odefault___MessageParser_0_c4_2xlarge_1);
+		messageReceiver_LoadBalancerObj.connectInstance(odefault___MessageReceiver_0_c4_large_0);
+	}
+
+	Unit undeploy_aux() {
+		SentimentAnalyserInterface odefault___SentimentAnalyser_0_c4_xlarge_0 = nth(ls_SentimentAnalyserInterface,0);
+		ImageRecognizerInterface odefault___ImageRecognizer_0_c4_2xlarge_0 = nth(ls_ImageRecognizerInterface,0);
+		NSFWDetectorInterface odefault___NSFWDetector_0_c4_2xlarge_1 = nth(ls_NSFWDetectorInterface,0);
+		SentimentAnalyserInterface odefault___SentimentAnalyser_0_c4_xlarge_1 = nth(ls_SentimentAnalyserInterface,1);
+		MessageAnalyserInterface odefault___MessageAnalyser_0_c4_2xlarge_0 = nth(ls_MessageAnalyserInterface,0);
+		LinkAnalyserInterface odefault___LinkAnalyser_0_c4_large_3 = nth(ls_LinkAnalyserInterface,0);
+		ImageAnalyserInterface odefault___ImageAnalyser_0_c4_2xlarge_0 = nth(ls_ImageAnalyserInterface,0);
+		HeaderAnalyserInterface odefault___HeaderAnalyser_0_c4_large_1 = nth(ls_HeaderAnalyserInterface,0);
+		TextAnalyserInterface odefault___TextAnalyser_0_c4_large_2 = nth(ls_TextAnalyserInterface,0);
+		AttachmentsManagerInterface odefault___AttachmentsManager_0_c4_large_0 = nth(ls_AttachmentsManagerInterface,0);
+		VirusScannerInterface odefault___VirusScanner_0_c4_xlarge_2 = nth(ls_VirusScannerInterface,0);
+		MessageParserInterface odefault___MessageParser_0_c4_2xlarge_1 = nth(ls_MessageParserInterface,0);
+		MessageReceiverInterface odefault___MessageReceiver_0_c4_large_0 = nth(ls_MessageReceiverInterface,0);
+		imageRecognizer_LoadBalancerObj.disconnectInstance();
+		sentimentAnalyser_LoadBalancerObj.disconnectInstance();
+		sentimentAnalyser_LoadBalancerObj.disconnectInstance();
+		nsfwDetector_LoadBalancerObj.disconnectInstance();
+		messageAnalyser_LoadBalancerObj.disconnectInstance();
+		headerAnalyser_LoadBalancerObj.disconnectInstance();
+		imageAnalyser_LoadBalancerObj.disconnectInstance();
+		textAnalyser_LoadBalancerObj.disconnectInstance();
+		linkAnalyser_LoadBalancerObj.disconnectInstance();
+		attachmentsManager_LoadBalancerObj.disconnectInstance();
+		virusScanner_LoadBalancerObj.disconnectInstance();
+		messageParser_LoadBalancerObj.disconnectInstance();
+		messageReceiver_LoadBalancerObj.disconnectInstance();
+		while ( !isEmpty(ls_DeploymentComponent) ) {
+			cloudProvider.shutdownInstance(head(ls_DeploymentComponent));
+			ls_DeploymentComponent = tail(ls_DeploymentComponent);
+		}
+	}
+
+	Unit patchSpeed(Map<DeploymentComponent,Rat> dcs) {
+		foreach(entry in entries(dcs)) {
+			DeploymentComponent dc = fst(entry);
+			Rat coreUsed = snd(entry);
+			InfRat speed_aux = await dc!total(Speed);
+			Rat total_speed = case speed_aux {
+				Fin(x) => x;
+				_ => -1;
+			};
+			if(total_speed != -1) {
+				Rat totalCore = await dc!getNumberOfCores();
+				Rat speedPerCore = total_speed / totalCore;
+				dc!decrementResources(total_speed - (speedPerCore * coreUsed), Speed);
+			}
+		}
+	}
+}

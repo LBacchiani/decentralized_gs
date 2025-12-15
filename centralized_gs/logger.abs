@@ -1,0 +1,54 @@
+module Logger;
+
+export *;
+
+import * from Prometheus;
+import * from Reconfig_Param;
+import * from Param;
+
+
+interface ILogger {
+    Unit log(Rat time, Rat start, Rat end, Map<String,Rat> metrics);
+}
+
+class Logger(PrometheusInterface prom) implements ILogger {
+
+    
+    Unit log(Rat time, Rat start, Rat end, Map<String,Rat> metrics) {
+        Float total = float(lookupDefault(metrics,"tot" + global_service_name(),0));
+        Float loss = float(lookupDefault(metrics,"rej" + global_service_name(),0));
+        Float mcl = float(lookupDefault(metrics,"supp" + global_service_name(),0));
+        Float inst = float(lookupDefault(metrics,"inst" + global_service_name(),0));
+        Float completed = when lookupDefault(metrics,"comp" + global_service_name(),0) == 0 then -1.0 else float(lookupDefault(metrics,"comp" + global_service_name(),0));
+        Float next = 0.0;
+        Float mixed = 0.0;
+        if (proactiveness()) {
+            Int index = truncate(time % length(predicted_workload()));
+            Int tmp = this.sum(nth(predicted_workload(),index));
+            next = float(tmp/monitoring_window());
+        }
+        // if (mixing()) {
+        //     mixed = float(target);
+        // }
+        Float avgLat = when lookupDefault(metrics,"latency" + global_service_name(),0) == 0 then 0.0001 else float(lookupDefault(metrics,"latency" + global_service_name(),0)/rat(completed));
+        if (total == 0.0) {
+            avgLat = 0.0; 
+            completed = 0.0;
+        }
+        String proactive_log = when proactiveness() then " next: " + toString(next) else "";
+        // String losses = "";
+        // foreach (s in services()) {
+        //     Float lossLocal = float(lookupDefault(metrics,"rej" + s,0));
+        //     Float tot = float(lookupDefault(metrics,"tot" + s,0));
+        //     losses = losses + " " + s + " (tot: " + toString(tot) + " loss: " + toString(lossLocal) + ")";
+        // }
+        println(toString(time * monitoring_window()) + " " + toString(avgLat * float(1000/time_unit_to_sec())) + proactive_log + " measured: " +  toString(float(rat(total)/monitoring_window())) + " tot: " + toString(total) + " comp: " + toString(completed) + " rej: " + toString(loss) + " supp: " + toString(mcl) + " inst: " + toString(inst));// + losses);
+
+    }
+
+    Int sum(List<Int> vs) {
+        Int s = 0;
+        foreach (v in vs) s = s + v;
+        return s;
+    }
+}

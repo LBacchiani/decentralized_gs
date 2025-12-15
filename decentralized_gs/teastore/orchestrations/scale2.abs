@@ -1,0 +1,223 @@
+module Scale2;
+export *;
+import * from ABS.DC;
+import * from Architecture;
+import * from Prometheus;
+
+interface Scale2{
+	List<ImageLoadBalancerInterface> getImageLoadBalancerInterface();
+	List<WebUILoadBalancerInterface> getWebUILoadBalancerInterface();
+	List<AuthLoadBalancerInterface> getAuthLoadBalancerInterface();
+	List<RecommenderInterface> getRecommenderInterface();
+	List<WebUIInterface> getWebUIInterface();
+	List<PersistenceLoadBalancerInterface> getPersistenceLoadBalancerInterface();
+	List<ImageInterface> getImageInterface();
+	List<AuthInterface> getAuthInterface();
+	List<RecommenderLoadBalancerInterface> getRecommenderLoadBalancerInterface();
+	List<PersistenceInterface> getPersistenceInterface();
+	List<DeploymentComponent> getDeploymentComponent();
+	Unit deploy();
+	Unit undeploy();
+}
+
+class Scale2(CloudProvider cloudProvider, AuthLoadBalancerInterface authLB, WebUILoadBalancerInterface webUILB, PersistenceLoadBalancerInterface persistenceLB, ImageLoadBalancerInterface imageLB, PrometheusInterface prometheus, RecommenderLoadBalancerInterface recommenderLB) implements Scale2{
+
+	List<List<ImageLoadBalancerInterface>> ls_ls_ImageLoadBalancerInterface = Nil;
+	List<ImageLoadBalancerInterface> ls_ImageLoadBalancerInterface = Nil;
+	List<List<WebUILoadBalancerInterface>> ls_ls_WebUILoadBalancerInterface = Nil;
+	List<WebUILoadBalancerInterface> ls_WebUILoadBalancerInterface = Nil;
+	List<List<AuthLoadBalancerInterface>> ls_ls_AuthLoadBalancerInterface = Nil;
+	List<AuthLoadBalancerInterface> ls_AuthLoadBalancerInterface = Nil;
+	List<List<RecommenderInterface>> ls_ls_RecommenderInterface = Nil;
+	List<RecommenderInterface> ls_RecommenderInterface = Nil;
+	List<List<WebUIInterface>> ls_ls_WebUIInterface = Nil;
+	List<WebUIInterface> ls_WebUIInterface = Nil;
+	List<List<PersistenceLoadBalancerInterface>> ls_ls_PersistenceLoadBalancerInterface = Nil;
+	List<PersistenceLoadBalancerInterface> ls_PersistenceLoadBalancerInterface = Nil;
+	List<List<ImageInterface>> ls_ls_ImageInterface = Nil;
+	List<ImageInterface> ls_ImageInterface = Nil;
+	List<List<AuthInterface>> ls_ls_AuthInterface = Nil;
+	List<AuthInterface> ls_AuthInterface = Nil;
+	List<List<RecommenderLoadBalancerInterface>> ls_ls_RecommenderLoadBalancerInterface = Nil;
+	List<RecommenderLoadBalancerInterface> ls_RecommenderLoadBalancerInterface = Nil;
+	List<List<PersistenceInterface>> ls_ls_PersistenceInterface = Nil;
+	List<PersistenceInterface> ls_PersistenceInterface = Nil;
+	List<List<DeploymentComponent>> ls_ls_DeploymentComponent = Nil;
+	List<DeploymentComponent> ls_DeploymentComponent = Nil;
+	Rat waiting_time = 1/10;
+	{
+		cloudProvider.addInstanceDescription(Pair("c4_4xlarge",
+			map[Pair(CostPerInterval,796)
+			,Pair(PaymentInterval,1)
+			,Pair(Bandwidth,2000)
+			,Pair(Memory,3000)
+			,Pair(Cores,16000)
+			,Pair(Speed,80000)
+			]));
+		cloudProvider.addInstanceDescription(Pair("c4_xlarge",
+			map[Pair(CostPerInterval,199)
+			,Pair(PaymentInterval,1)
+			,Pair(Bandwidth,750)
+			,Pair(Memory,750)
+			,Pair(Cores,4000)
+			,Pair(Speed,20000)
+			]));
+		cloudProvider.addInstanceDescription(Pair("c4_large",
+			map[Pair(CostPerInterval,100)
+			,Pair(PaymentInterval,1)
+			,Pair(Bandwidth,500)
+			,Pair(Memory,375)
+			,Pair(Cores,2000)
+			,Pair(Speed,10000)
+			]));
+		cloudProvider.addInstanceDescription(Pair("c4_2xlarge",
+			map[Pair(CostPerInterval,398)
+			,Pair(PaymentInterval,1)
+			,Pair(Bandwidth,1000)
+			,Pair(Memory,1500)
+			,Pair(Cores,8000)
+			,Pair(Speed,40000)
+			]));
+	}
+
+	List<ImageLoadBalancerInterface> getImageLoadBalancerInterface() { return ls_ImageLoadBalancerInterface; }
+	List<WebUILoadBalancerInterface> getWebUILoadBalancerInterface() { return ls_WebUILoadBalancerInterface; }
+	List<AuthLoadBalancerInterface> getAuthLoadBalancerInterface() { return ls_AuthLoadBalancerInterface; }
+	List<RecommenderInterface> getRecommenderInterface() { return ls_RecommenderInterface; }
+	List<WebUIInterface> getWebUIInterface() { return ls_WebUIInterface; }
+	List<PersistenceLoadBalancerInterface> getPersistenceLoadBalancerInterface() { return ls_PersistenceLoadBalancerInterface; }
+	List<ImageInterface> getImageInterface() { return ls_ImageInterface; }
+	List<AuthInterface> getAuthInterface() { return ls_AuthInterface; }
+	List<RecommenderLoadBalancerInterface> getRecommenderLoadBalancerInterface() { return ls_RecommenderLoadBalancerInterface; }
+	List<PersistenceInterface> getPersistenceInterface() { return ls_PersistenceInterface; }
+	List<DeploymentComponent> getDeploymentComponent() { return ls_DeploymentComponent; }
+
+	Unit deploy() {
+		ls_ls_ImageLoadBalancerInterface = Cons(ls_ImageLoadBalancerInterface,ls_ls_ImageLoadBalancerInterface);
+		ls_ImageLoadBalancerInterface = Nil;
+		ls_ls_WebUILoadBalancerInterface = Cons(ls_WebUILoadBalancerInterface,ls_ls_WebUILoadBalancerInterface);
+		ls_WebUILoadBalancerInterface = Nil;
+		ls_ls_AuthLoadBalancerInterface = Cons(ls_AuthLoadBalancerInterface,ls_ls_AuthLoadBalancerInterface);
+		ls_AuthLoadBalancerInterface = Nil;
+		ls_ls_RecommenderInterface = Cons(ls_RecommenderInterface,ls_ls_RecommenderInterface);
+		ls_RecommenderInterface = Nil;
+		ls_ls_WebUIInterface = Cons(ls_WebUIInterface,ls_ls_WebUIInterface);
+		ls_WebUIInterface = Nil;
+		ls_ls_PersistenceLoadBalancerInterface = Cons(ls_PersistenceLoadBalancerInterface,ls_ls_PersistenceLoadBalancerInterface);
+		ls_PersistenceLoadBalancerInterface = Nil;
+		ls_ls_ImageInterface = Cons(ls_ImageInterface,ls_ls_ImageInterface);
+		ls_ImageInterface = Nil;
+		ls_ls_AuthInterface = Cons(ls_AuthInterface,ls_ls_AuthInterface);
+		ls_AuthInterface = Nil;
+		ls_ls_RecommenderLoadBalancerInterface = Cons(ls_RecommenderLoadBalancerInterface,ls_ls_RecommenderLoadBalancerInterface);
+		ls_RecommenderLoadBalancerInterface = Nil;
+		ls_ls_PersistenceInterface = Cons(ls_PersistenceInterface,ls_ls_PersistenceInterface);
+		ls_PersistenceInterface = Nil;
+		ls_ls_DeploymentComponent = Cons(ls_DeploymentComponent,ls_ls_DeploymentComponent);
+		ls_DeploymentComponent = Nil;
+		this.deploy_aux();
+	}
+
+	Unit undeploy() {
+		if (ls_ls_DeploymentComponent != Nil) {
+			this.undeploy_aux();
+			ls_DeploymentComponent = head(ls_ls_DeploymentComponent);
+			ls_ls_DeploymentComponent = tail(ls_ls_DeploymentComponent);
+				ls_ImageLoadBalancerInterface = head(ls_ls_ImageLoadBalancerInterface);
+				ls_WebUILoadBalancerInterface = head(ls_ls_WebUILoadBalancerInterface);
+				ls_AuthLoadBalancerInterface = head(ls_ls_AuthLoadBalancerInterface);
+				ls_RecommenderInterface = head(ls_ls_RecommenderInterface);
+				ls_WebUIInterface = head(ls_ls_WebUIInterface);
+				ls_PersistenceLoadBalancerInterface = head(ls_ls_PersistenceLoadBalancerInterface);
+				ls_ImageInterface = head(ls_ls_ImageInterface);
+				ls_AuthInterface = head(ls_ls_AuthInterface);
+				ls_RecommenderLoadBalancerInterface = head(ls_ls_RecommenderLoadBalancerInterface);
+				ls_PersistenceInterface = head(ls_ls_PersistenceInterface);
+			ls_ls_ImageLoadBalancerInterface = tail(ls_ls_ImageLoadBalancerInterface);
+			ls_ls_WebUILoadBalancerInterface = tail(ls_ls_WebUILoadBalancerInterface);
+			ls_ls_AuthLoadBalancerInterface = tail(ls_ls_AuthLoadBalancerInterface);
+			ls_ls_RecommenderInterface = tail(ls_ls_RecommenderInterface);
+			ls_ls_WebUIInterface = tail(ls_ls_WebUIInterface);
+			ls_ls_PersistenceLoadBalancerInterface = tail(ls_ls_PersistenceLoadBalancerInterface);
+			ls_ls_ImageInterface = tail(ls_ls_ImageInterface);
+			ls_ls_AuthInterface = tail(ls_ls_AuthInterface);
+			ls_ls_RecommenderLoadBalancerInterface = tail(ls_ls_RecommenderLoadBalancerInterface);
+			ls_ls_PersistenceInterface = tail(ls_ls_PersistenceInterface);
+		}
+	}
+
+
+	Unit deploy_aux() {
+		Map<DeploymentComponent,Rat> speedPatchMap = map[];
+		DeploymentComponent c4_xlarge_1 = cloudProvider.launchInstanceNamed("c4_xlarge");
+		ls_DeploymentComponent = Cons(c4_xlarge_1,ls_DeploymentComponent);
+		speedPatchMap = put(speedPatchMap,c4_xlarge_1,0);
+		DeploymentComponent c4_xlarge_0 = cloudProvider.launchInstanceNamed("c4_xlarge");
+		ls_DeploymentComponent = Cons(c4_xlarge_0,ls_DeploymentComponent);
+		speedPatchMap = put(speedPatchMap,c4_xlarge_0,0);
+		DeploymentComponent c4_2xlarge_0 = cloudProvider.launchInstanceNamed("c4_2xlarge");
+		ls_DeploymentComponent = Cons(c4_2xlarge_0,ls_DeploymentComponent);
+		speedPatchMap = put(speedPatchMap,c4_2xlarge_0,0);
+		[DC: c4_2xlarge_0] PersistenceInterface odefault___Persistence_0_c4_2xlarge_0 = new Persistence(prometheus);
+		Rat coreRequired_odefault___Persistence_0_c4_2xlarge_0 = 900;
+		speedPatchMap = put(speedPatchMap, c4_2xlarge_0, fromJust(lookup(speedPatchMap,c4_2xlarge_0)) + coreRequired_odefault___Persistence_0_c4_2xlarge_0);
+		ls_PersistenceInterface = Cons(odefault___Persistence_0_c4_2xlarge_0, ls_PersistenceInterface);
+		[DC: c4_2xlarge_0] ImageInterface odefault___Image_0_c4_2xlarge_0 = new Image(prometheus);
+		Rat coreRequired_odefault___Image_0_c4_2xlarge_0 = 1100;
+		speedPatchMap = put(speedPatchMap, c4_2xlarge_0, fromJust(lookup(speedPatchMap,c4_2xlarge_0)) + coreRequired_odefault___Image_0_c4_2xlarge_0);
+		ls_ImageInterface = Cons(odefault___Image_0_c4_2xlarge_0, ls_ImageInterface);
+		[DC: c4_2xlarge_0] ImageInterface odefault___Image_1_c4_2xlarge_0 = new Image(prometheus);
+		Rat coreRequired_odefault___Image_1_c4_2xlarge_0 = 1100;
+		speedPatchMap = put(speedPatchMap, c4_2xlarge_0, fromJust(lookup(speedPatchMap,c4_2xlarge_0)) + coreRequired_odefault___Image_1_c4_2xlarge_0);
+		ls_ImageInterface = Cons(odefault___Image_1_c4_2xlarge_0, ls_ImageInterface);
+		[DC: c4_xlarge_0] AuthInterface odefault___Auth_0_c4_xlarge_0 = new Auth(prometheus, persistenceLB);
+		Rat coreRequired_odefault___Auth_0_c4_xlarge_0 = 900;
+		speedPatchMap = put(speedPatchMap, c4_xlarge_0, fromJust(lookup(speedPatchMap,c4_xlarge_0)) + coreRequired_odefault___Auth_0_c4_xlarge_0);
+		ls_AuthInterface = Cons(odefault___Auth_0_c4_xlarge_0, ls_AuthInterface);
+		[DC: c4_xlarge_1] WebUIInterface odefault___WebUI_0_c4_xlarge_1 = new WebUI(prometheus, persistenceLB, authLB, imageLB, recommenderLB);
+		Rat coreRequired_odefault___WebUI_0_c4_xlarge_1 = 1200;
+		speedPatchMap = put(speedPatchMap, c4_xlarge_1, fromJust(lookup(speedPatchMap,c4_xlarge_1)) + coreRequired_odefault___WebUI_0_c4_xlarge_1);
+		ls_WebUIInterface = Cons(odefault___WebUI_0_c4_xlarge_1, ls_WebUIInterface);
+		this!patchSpeed(speedPatchMap);
+		await duration(waiting_time,waiting_time);
+		persistenceLB.connectInstance(odefault___Persistence_0_c4_2xlarge_0);
+		imageLB.connectInstance(odefault___Image_0_c4_2xlarge_0);
+		imageLB.connectInstance(odefault___Image_1_c4_2xlarge_0);
+		authLB.connectInstance(odefault___Auth_0_c4_xlarge_0);
+		webUILB.connectInstance(odefault___WebUI_0_c4_xlarge_1);
+	}
+
+	Unit undeploy_aux() {
+		PersistenceInterface odefault___Persistence_0_c4_2xlarge_0 = nth(ls_PersistenceInterface,0);
+		ImageInterface odefault___Image_0_c4_2xlarge_0 = nth(ls_ImageInterface,0);
+		ImageInterface odefault___Image_1_c4_2xlarge_0 = nth(ls_ImageInterface,1);
+		AuthInterface odefault___Auth_0_c4_xlarge_0 = nth(ls_AuthInterface,0);
+		WebUIInterface odefault___WebUI_0_c4_xlarge_1 = nth(ls_WebUIInterface,0);
+		persistenceLB.disconnectInstance();
+		imageLB.disconnectInstance();
+		imageLB.disconnectInstance();
+		authLB.disconnectInstance();
+		webUILB.disconnectInstance();
+		while ( !isEmpty(ls_DeploymentComponent) ) {
+			cloudProvider.shutdownInstance(head(ls_DeploymentComponent));
+			ls_DeploymentComponent = tail(ls_DeploymentComponent);
+		}
+	}
+
+	Unit patchSpeed(Map<DeploymentComponent,Rat> dcs) {
+		foreach(entry in entries(dcs)) {
+			DeploymentComponent dc = fst(entry);
+			Rat coreUsed = snd(entry);
+			InfRat speed_aux = await dc!total(Speed);
+			Rat total_speed = case speed_aux {
+				Fin(x) => x;
+				_ => -1;
+			};
+			if(total_speed != -1) {
+				Rat totalCore = await dc!getNumberOfCores();
+				Rat speedPerCore = total_speed / totalCore;
+				dc!decrementResources(total_speed - (speedPerCore * coreUsed), Speed);
+			}
+		}
+	}
+}

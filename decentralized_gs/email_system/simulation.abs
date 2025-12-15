@@ -1,0 +1,120 @@
+module Simulation;
+
+export *;
+import * from Monitor;
+import * from Architecture;
+import * from ABS.DC;
+import * from InvariantsDeployer;
+import * from BaseScale;
+import * from WorkloadGenerator;
+import * from Prometheus;
+import * from Reconfig_Param;
+import * from Param;
+import * from DB;
+import * from Actuation;
+import * from DecentralizedScaler;
+
+interface ISimulation {
+     Unit start();
+}
+
+class Simulation() implements ISimulation {
+
+     Unit start() {
+
+          CloudProvider cp = new CloudProvider("CloudProvider");
+          PrometheusInterface prometheus = new Prometheus();
+          DBInterface db = new DB(prometheus);
+          InvariantsDeployer c1 = new InvariantsDeployer(cp,prometheus,db);
+          await c1!deploy();
+          List<MessageReceiver_LoadBalancerInterface> messageReceiver_LoadBalancerList = await c1!getMessageReceiver_LoadBalancerInterface();
+          MessageReceiver_LoadBalancerInterface mrLB = head(messageReceiver_LoadBalancerList);
+          List<MessageParser_LoadBalancerInterface> messageParser_LoadBalancerList = await c1!getMessageParser_LoadBalancerInterface();
+          MessageParser_LoadBalancerInterface mpLB = head(messageParser_LoadBalancerList);
+	     List<HeaderAnalyser_LoadBalancerInterface> headerAnalyser_LoadBalancerList = await c1!getHeaderAnalyser_LoadBalancerInterface();
+          HeaderAnalyser_LoadBalancerInterface haLB = head(headerAnalyser_LoadBalancerList);
+	     List<LinkAnalyser_LoadBalancerInterface> linkAnalyser_LoadBalancerList = await c1!getLinkAnalyser_LoadBalancerInterface();
+          LinkAnalyser_LoadBalancerInterface laLB = head(linkAnalyser_LoadBalancerList);
+	     List<TextAnalyser_LoadBalancerInterface> textAnalyser_LoadBalancerList = await c1!getTextAnalyser_LoadBalancerInterface();
+          TextAnalyser_LoadBalancerInterface taLB = head(textAnalyser_LoadBalancerList);
+	     List<SentimentAnalyser_LoadBalancerInterface> sentimentAnalyser_LoadBalancerList = await c1!getSentimentAnalyser_LoadBalancerInterface();
+          SentimentAnalyser_LoadBalancerInterface saLB = head(sentimentAnalyser_LoadBalancerList);
+          List<VirusScanner_LoadBalancerInterface> virusScanner_LoadBalancerList = await c1!getVirusScanner_LoadBalancerInterface();
+          VirusScanner_LoadBalancerInterface vsLB = head(virusScanner_LoadBalancerList);
+	     List<AttachmentsManager_LoadBalancerInterface> attachmentsManager_LoadBalancerList = await c1!getAttachmentsManager_LoadBalancerInterface();
+          AttachmentsManager_LoadBalancerInterface amLB = head(attachmentsManager_LoadBalancerList);
+	     List<ImageAnalyser_LoadBalancerInterface> imageAnalyser_LoadBalancerList = await c1!getImageAnalyser_LoadBalancerInterface();
+          ImageAnalyser_LoadBalancerInterface iaLB = head(imageAnalyser_LoadBalancerList);
+	     List<NSFWDetector_LoadBalancerInterface> nsfwDetector_LoadBalancerList = await c1!getNSFWDetector_LoadBalancerInterface();
+          NSFWDetector_LoadBalancerInterface nsfwLB = head(nsfwDetector_LoadBalancerList);
+          List<ImageRecognizer_LoadBalancerInterface> imageRecognizer_LoadBalancerList = await c1!getImageRecognizer_LoadBalancerInterface();
+          ImageRecognizer_LoadBalancerInterface irLB = head(imageRecognizer_LoadBalancerList);
+          List<MessageAnalyser_LoadBalancerInterface> messageAnalyser_LoadBalancerList = await c1!getMessageAnalyser_LoadBalancerInterface();
+          MessageAnalyser_LoadBalancerInterface maLB = head(messageAnalyser_LoadBalancerList);
+
+          ////SETUP///
+          // BaseScale c2 = new BaseScale(cp, prometheus, receiverLB, parserLB, headerLB, linkLB, textLB,  sentimentLB, virusScannerLB, attManagerLB, imageAnalyzerLB, nsfwDetectorLB, imageRecognizerLB, messageAnalyzerLB, db);
+          // await c2!deploy();
+          DeploymentComponent dc = await cp!launchInstance(map[Pair(Speed, speed_per_core() * nth(cores(),0))]);
+          [DC: dc] MessageReceiverInterface mr = new MessageReceiver(prometheus, mpLB);
+          mrLB.connectInstance(mr);
+     
+          DeploymentComponent dc1 = await cp!launchInstance(map[Pair(Speed, speed_per_core() * nth(cores(),1))]);
+          [DC: dc1] MessageParserInterface mp = new MessageParser(prometheus, haLB, laLB, taLB, vsLB, maLB, db);
+          mpLB.connectInstance(mp);
+        
+          DeploymentComponent dc2 = await cp!launchInstance(map[Pair(Speed, speed_per_core() * nth(cores(),2))]);
+          [DC: dc2] HeaderAnalyserInterface ha = new HeaderAnalyser(prometheus, maLB);
+          haLB.connectInstance(ha);
+         
+          DeploymentComponent dc3 = await cp!launchInstance(map[Pair(Speed, speed_per_core() * nth(cores(),3))]);
+          [DC: dc3] LinkAnalyserInterface la = new LinkAnalyser(prometheus, maLB);
+          laLB.connectInstance(la);
+        
+          DeploymentComponent dc4 = await cp!launchInstance(map[Pair(Speed, speed_per_core() * nth(cores(),4))]);
+          [DC: dc4] TextAnalyserInterface ta = new TextAnalyser(prometheus, saLB, maLB);
+          taLB.connectInstance(ta);
+        
+          DeploymentComponent dc5 = await cp!launchInstance(map[Pair(Speed, speed_per_core() * nth(cores(),5))]);
+          [DC: dc5] SentimentAnalyserInterface sa1 = new SentimentAnalyser(prometheus);
+          saLB.connectInstance(sa1);
+     
+          DeploymentComponent dc6 = await cp!launchInstance(map[Pair(Speed, speed_per_core() * nth(cores(),5))]);
+          [DC: dc6] SentimentAnalyserInterface sa2 = new SentimentAnalyser(prometheus);
+          saLB.connectInstance(sa2);
+        
+          DeploymentComponent dc7 = await cp!launchInstance(map[Pair(Speed, speed_per_core() * nth(cores(),6))]);
+          [DC: dc7] VirusScannerInterface vs = new VirusScanner(prometheus, amLB, maLB);
+          vsLB.connectInstance(vs);
+        
+          DeploymentComponent dc8 = await cp!launchInstance(map[Pair(Speed, speed_per_core() * nth(cores(),7))]);
+          [DC: dc8] AttachmentsManagerInterface am = new AttachmentsManager(prometheus, iaLB);
+          amLB.connectInstance(am);
+        
+          DeploymentComponent dc9 = await cp!launchInstance(map[Pair(Speed, speed_per_core() * nth(cores(),8))]);
+          [DC: dc9] ImageAnalyserInterface ia = new ImageAnalyser(prometheus, nsfwLB, irLB, maLB);
+          iaLB.connectInstance(ia);
+        
+          DeploymentComponent dc10 = await cp!launchInstance(map[Pair(Speed, speed_per_core() * nth(cores(),9))]);
+          [DC: dc10] NSFWDetectorInterface nsfw = new NSFWDetector(prometheus);
+          nsfwLB.connectInstance(nsfw);
+        
+          DeploymentComponent dc11 = await cp!launchInstance(map[Pair(Speed, speed_per_core() * nth(cores(),10))]);
+          [DC: dc11] ImageRecognizerInterface ir = new ImageRecognizer(prometheus);
+          irLB.connectInstance(ir);
+        
+          DeploymentComponent dc12 = await cp!launchInstance(map[Pair(Speed, speed_per_core() * nth(cores(),11))]);
+          [DC: dc12] MessageAnalyserInterface ma = new MessageAnalyser(prometheus, db);
+          maLB.connectInstance(ma);
+        
+          Int i = 0;
+          while (i < length(services())) {
+               new DecentralizedScaler(i, nth(base_config(),i), cp, prometheus, mrLB, mpLB, haLB, laLB, taLB, saLB, vsLB, amLB, iaLB, nsfwLB, irLB, maLB, db, list[]);
+               i = i + 1;
+          }
+
+          
+          new Monitor(prometheus);
+          new WorkloadGenerator(mrLB);
+     }
+}

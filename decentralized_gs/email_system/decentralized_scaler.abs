@@ -1,0 +1,195 @@
+module DecentralizedScaler;
+
+
+export *;
+import * from ABS.DC;
+import * from Architecture;
+import * from Prometheus;
+import * from Param;
+import * from DB;
+
+data NodeState = Follower | Candidate | Leader;
+data LeaderStatus = LeaderStatus(
+    Rat mf_history,   // metrics per microservice
+    Rat mcl_history,  // metrics per microservice
+    Int numReplicas,               // number of replicas
+    List<DecentralizedScalerInterface> controlPlaneAddresses
+);
+
+interface DecentralizedScalerInterface {
+    // Unit start();
+    Unit fail();
+    // Fut<Bool> requestVote(Int term, String candidateId);
+    // Unit receiveHeartbeat(Int term, String leaderId, LeaderStatus status);
+}
+
+class DecentralizedScaler(Int serviceType, Int minReplicas, CloudProvider cp, PrometheusInterface prometheus, MessageReceiver_LoadBalancerInterface mrLB, MessageParser_LoadBalancerInterface mpLB, HeaderAnalyser_LoadBalancerInterface haLB, LinkAnalyser_LoadBalancerInterface laLB, TextAnalyser_LoadBalancerInterface taLB, SentimentAnalyser_LoadBalancerInterface saLB, VirusScanner_LoadBalancerInterface vsLB, AttachmentsManager_LoadBalancerInterface amLB, ImageAnalyser_LoadBalancerInterface iaLB, NSFWDetector_LoadBalancerInterface nsfwLB, ImageRecognizer_LoadBalancerInterface irLB, MessageAnalyser_LoadBalancerInterface maLB, DBInterface db, List<DecentralizedScalerInterface> peers) implements DecentralizedScalerInterface {
+
+    Bool failed = False;
+    Rat mf_history = 0;
+    Rat mcl = 0;
+    Int time = 0;
+    Int replicas = minReplicas;
+    Metric instances;
+    {
+        instances = new local InstantMetric(Pair("inst", nth(services(), serviceType)));
+        prometheus!register(list[instances]);
+        instances!push(replicas);
+    }
+
+    Unit helper() {
+        
+    }
+
+    Unit run() {
+        while (time < cycles() && !failed) {
+            await duration(monitoring_window() * time_unit_to_sec());
+            instances!push(replicas);
+            time = time + 1;
+            Fut<Rat> fut_total_global = prometheus!getV("tot", global_service_name());
+            Fut<Rat> fut_total_completed = prometheus!getV("comp", nth(services(), 0));
+            Fut<Rat> fut_loss = prometheus!getV("rej", nth(services(), serviceType));
+            Fut<Rat> fut_total_local = prometheus!getV("tot", nth(services(), serviceType));
+            Fut<Rat> fut_completed = prometheus!getV("comp", nth(services(), serviceType));
+            await fut_total_global?;
+            await fut_total_completed?;
+            await fut_loss?;
+            await fut_total_local?;
+            await fut_completed?;
+            Rat total_global = fut_total_global.get;
+            Rat total_completed = fut_total_completed.get;
+            Rat loss = fut_loss.get;
+            Rat total_local = fut_total_local.get;
+            Rat completed = fut_completed.get;
+            total_global = total_global / monitoring_window();
+            total_completed = total_completed / monitoring_window();
+            total_local = total_local / monitoring_window();
+            completed = completed / monitoring_window();
+            this.learnMCL(completed, replicas);
+            this.learnMF(total_completed, total_local);
+            Rat curr_mf = when total_completed != 0 then total_local / total_completed else 0;
+            Rat slo = min(when total_local != 0 then completed / total_local else 1,1);
+            Rat avg_mf = mf_history / time;
+            Int target_replicas = max(when mcl != 0 then ceil(float(avg_mf * total_global / mcl)) else 0, minReplicas);
+            println(nth(services(), serviceType) + " T: " + toString(time) + " C: " + toString(float(completed)) + " TG: " + toString(float(total_global)) + " TL: " + toString(float(total_local)) + " MCL: " + toString(float(mcl)) + " AVG MF: " + toString(float(avg_mf)) + " CURR MF: " + toString(float(curr_mf)) + " TRep: " + toString(target_replicas) + " CRep: " + toString(replicas) + " SLO: " + toString(float(slo)) + " LOSS: " + toString(loss));
+            if (target_replicas > replicas && slo < slo()) {
+                Int toAdd = target_replicas - replicas;
+                replicas = replicas + toAdd;
+                Int i = 0;
+                while (i < toAdd) {
+                    this!deploy();
+                    i = i + 1;
+                }
+            } else if (target_replicas < replicas) {
+                Int toRemove = replicas - target_replicas;
+                replicas = replicas - toRemove;
+                Int i = 0;
+                while (i < toRemove) {
+                    this!undeploy();
+                    i = i + 1;
+                }
+            }
+        }
+    }
+
+    Unit fail() { failed = True;}
+
+
+    Unit deploy() {
+        Int cores = nth(cores(), serviceType);
+        DeploymentComponent dc = await cp!launchInstance(map[Pair(Speed, speed_per_core() * cores)]);
+        if (serviceType == 0) {
+            [DC: dc] MessageReceiverInterface mr = new MessageReceiver(prometheus, mpLB);
+            mrLB.connectInstance(mr);
+        } 
+        if (serviceType == 1) {
+            [DC: dc] MessageParserInterface mp = new MessageParser(prometheus, haLB, laLB, taLB, vsLB, maLB, db);
+            mpLB.connectInstance(mp);
+        } 
+        if (serviceType == 2) {
+            [DC: dc] HeaderAnalyserInterface ha = new HeaderAnalyser(prometheus, maLB);
+            haLB.connectInstance(ha);
+        }  
+        if (serviceType == 3) {
+            [DC: dc] LinkAnalyserInterface la = new LinkAnalyser(prometheus, maLB);
+            laLB.connectInstance(la);
+        }   
+        if (serviceType == 4) {
+            [DC: dc] TextAnalyserInterface ta = new TextAnalyser(prometheus, saLB, maLB);
+            taLB.connectInstance(ta);
+        }  
+        if (serviceType == 5) {
+            [DC: dc] SentimentAnalyserInterface sa = new SentimentAnalyser(prometheus);
+            saLB.connectInstance(sa);
+        }
+        if (serviceType == 6) {
+            [DC: dc] VirusScannerInterface vs = new VirusScanner(prometheus, amLB, maLB);
+            vsLB.connectInstance(vs);
+        }
+        if (serviceType == 7) {
+            [DC: dc] AttachmentsManagerInterface am = new AttachmentsManager(prometheus, iaLB);
+            amLB.connectInstance(am);
+        }
+        if (serviceType == 8) {
+            [DC: dc] ImageAnalyserInterface ia = new ImageAnalyser(prometheus, nsfwLB, irLB, maLB);
+            iaLB.connectInstance(ia);
+        }
+        if (serviceType == 9) {
+            [DC: dc] NSFWDetectorInterface nsfw = new NSFWDetector(prometheus);
+            nsfwLB.connectInstance(nsfw);
+        }
+        if (serviceType == 10) {
+            [DC: dc] ImageRecognizerInterface ir = new ImageRecognizer(prometheus);
+            irLB.connectInstance(ir);
+        }
+        if (serviceType == 11) {
+            [DC: dc] MessageAnalyserInterface ma = new MessageAnalyser(prometheus, db);
+            maLB.connectInstance(ma);
+        }
+    }
+
+    Unit undeploy() {
+        if (serviceType == 0) {
+            mrLB!disconnectInstance();
+        } 
+        if (serviceType == 1) {
+            mpLB!disconnectInstance();
+        }   
+        if (serviceType == 5) {
+            saLB!disconnectInstance();
+        }
+        if (serviceType == 6) {
+            vsLB!disconnectInstance();
+        }
+        if (serviceType == 7) {
+            amLB!disconnectInstance();
+        }
+        if (serviceType == 8) {
+            iaLB!disconnectInstance();
+        }
+        if (serviceType == 9) {
+            nsfwLB!disconnectInstance();
+        }
+        if (serviceType == 10) {
+            irLB!disconnectInstance();
+        }
+        if (serviceType == 11) {
+            maLB!disconnectInstance();
+        }
+    }
+
+    Unit learnMCL(Rat completed, Int replicas) {
+        Rat curr_mcl = completed / replicas;
+        mcl = max(mcl, curr_mcl);
+    }
+
+    Unit learnMF(Rat total_completed, Rat total_local) {
+        Rat curr_mf = 0;
+        if (serviceType == 0) {
+            curr_mf = 1;
+        } else {
+            curr_mf = when total_completed != 0 then total_local / total_completed else 0;
+        }
+        mf_history = mf_history + curr_mf; 
+    }
+}

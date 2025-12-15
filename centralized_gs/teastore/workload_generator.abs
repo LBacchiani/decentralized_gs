@@ -1,0 +1,28 @@
+module WorkloadGenerator;
+
+export *;
+import * from Architecture;
+import * from Param;
+ 
+
+
+
+interface WorkloadGeneratorInterface {}
+
+class WorkloadGenerator(WebUILoadBalancerInterface webUI) implements WorkloadGeneratorInterface {
+
+    Int i = 0;
+
+    Unit run() {
+        while(i < length(workload())) {
+            Rat curr = nth(workload(), i);
+            i = i + 1; //(i + 1) % length(workload());
+            Int j = 0;
+            while(j < curr) {
+                webUI!request();
+                await duration(sendingWin() * time_unit_to_sec() / curr);
+                j = j + 1;
+            }
+        }
+    }
+}

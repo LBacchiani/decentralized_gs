@@ -1,0 +1,84 @@
+module Prometheus;
+
+export *;
+
+import * from Reconfig_Param;
+import * from Architecture;
+import * from Param;
+
+
+interface Metric {
+    [Atomic] Pair<String,String> id();
+    Rat value(); 
+   [Atomic] Unit push(Rat val);
+}
+
+class DiscreteMetric(Pair<String,String> id) implements Metric {
+    Pair<Rat,Int> live = Pair(0,0);
+    Pair<Rat,Int> snapshot = Pair(0,0);
+    
+    [Atomic] Pair<String,String> id() {return id;}
+    Rat value() {
+        Int current_window = floor(float(timeValue(now()) / monitoring_window())); 
+        Int live_window = snd(live);
+        Int snapshot_window = snd(snapshot);
+        if (live_window < current_window) {
+            snapshot = live;
+            live = Pair(0,current_window);
+
+        } 
+        return fst(snapshot); //when snapshot_window == current_window-1 then fst(snapshot) else fst(live);
+    }
+
+    [Atomic] Unit push(Rat val)  { 
+        Int current_window = floor(float(timeValue(now()) / monitoring_window())); 
+        Int live_window = snd(live);
+        // if (live_window < current_window) {
+        //     snapshot = live;
+        //     live = Pair(0,current_window);
+        // }
+        live = Pair(fst(live) + val, snd(live));
+    }
+}
+
+class InstantMetric(Pair<String,String> id) implements Metric {
+    Rat value = 0;
+    [Atomic] Pair<String,String> id() {return id;}
+    Rat value() { return value; }
+    [Atomic] Unit push(Rat val)  { value = val; }
+}
+
+//////////////////////////////////////////////////////////////////////
+
+interface PrometheusInterface {
+    [Atomic] Unit register(List<Metric> ms);
+    Rat getV(String metric, String key);
+}
+
+class Prometheus() implements PrometheusInterface {
+
+    Map<Pair<String,String>,List<Metric>> metrics = map[];
+    Int time = 0;
+
+    [Atomic] Unit register(List<Metric> ms) {
+        foreach (m in ms) {
+            Pair<String,String> id = m.id();
+            if (contains(keys(metrics),id)) {
+                List<Metric> tmp = lookupUnsafe(metrics,id);
+                tmp = appendright(tmp,m);
+                metrics = put(metrics,id,tmp);
+            }
+            else metrics = put(metrics,id,list[m]);
+        }
+    }
+
+    Rat getV(String metric, String key) {
+        List<Metric> ms = lookupDefault(metrics,Pair(metric,key),list[]);
+        Rat toRet = 0;
+        foreach (m in ms) {
+            Rat val = m.value();
+            toRet = toRet + val;
+        }
+        return toRet;
+    }
+}

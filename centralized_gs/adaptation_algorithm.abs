@@ -1,0 +1,155 @@
+module Adaptation;
+
+export *;
+import * from Wrapper;
+import * from Reconfig_Param; 
+import * from Prometheus;
+import * from Param;
+import * from Actuation;
+
+interface AdaptationAlgorithm {
+    Unit adapt(Map<String,Rat> metrics, Int time);
+}
+
+class GS_Scaler(List<WrapperScaleInterface> orchestrations, PrometheusInterface prom) implements AdaptationAlgorithm {
+    List<Int> deployedDeltas = list[];
+    Metric mclMetric;
+    Metric instMetric;
+    ActuationModuleInterface actuation; 
+    List<Int> last_pred_config = list[0,0,0,0];
+    List<Int> curr_config = base_config();
+
+    {
+        actuation = new local ActuationModule();
+        mclMetric = new local InstantMetric(Pair("supp",global_service_name()));
+        instMetric = new local InstantMetric(Pair("inst", global_service_name()));
+        prom!register(list[mclMetric,instMetric]);
+        Int i = length(orchestrations);
+        while (i > 0) {
+            deployedDeltas = appendright(deployedDeltas,0);
+            i = i - 1;
+        }
+        Rat mcl = this.mcl(base_config());
+        mclMetric!push(mcl);
+        Rat inst = this.instances(base_config());
+        instMetric!push(inst);
+    }
+
+    Unit adapt(Map<String,Rat> metrics, Int time) {
+        Rat measured = lookupUnsafe(metrics,"tot" + global_service_name())/monitoring_window();
+        Rat target = measured;
+        if (proactiveness()) {
+            Int index = time % length(predicted_workload());
+            Rat predicted = this.sum(nth(predicted_workload(), index));//foldr((Rat e, Rat acc) => e + acc)(nth(predicted_workload(), index),0);
+            predicted = predicted / monitoring_window();
+            target = predicted;
+            if (mixing()) {
+                List<Int> measured_conf = this.computeConfiguration(measured);  
+                Rat mixed = actuation.mix(measured, predicted, last_pred_config, measured_conf);
+                last_pred_config = this.computeConfiguration(predicted);
+                target = mixed;
+            }
+        }
+        List<Int> configDeltas = this.computeConfiguration(target);
+        Int instances = this.instances(curr_config);
+        Rat mcl = this.mcl(curr_config);
+        instMetric!push(instances);
+        mclMetric!push(mcl);
+        this!scale(configDeltas);
+    }
+
+    Unit scale(List<Int> configDeltas) {
+        Int i = 0;
+        Int numScales = length(orchestrations);
+
+        while(i < numScales) {
+            Int diff = nth(configDeltas,i) - nth(deployedDeltas,i);
+            Rat num = abs(diff);
+            while(num > 0) {
+                if (diff > 0) {nth(orchestrations,i)!deploy();}
+                else {nth(orchestrations,i)!undeploy();}
+                num = num - 1;
+            }
+            i = i + 1;
+        }
+        deployedDeltas = configDeltas;
+  }
+
+
+
+
+    List<Int> computeConfiguration(Rat target_workload) {
+        Int numScales = length(orchestrations);
+        List<Int> configDeltas = this.createEmpty(numScales);
+        List<Int> config = base_config();
+        Rat mcl = this.mcl(config);
+        Bool configFound = (mcl - kbig()) - target_workload  >= 0;
+        while(!configFound) {
+            List<Int> candidateConfig = base_config();
+            Int i = -1;
+            while(i < numScales - 1 && !configFound) {
+                i = i + 1;
+                candidateConfig = this.vSum(config, nth(scale_config(),i));
+                mcl = this.mcl(candidateConfig);
+                configFound = (mcl - kbig()) - target_workload  >= 0;
+                configDeltas = this.incDeltas(i,configDeltas);
+            }
+            config = candidateConfig;
+        }
+        curr_config = config;
+        return configDeltas;
+    }
+
+   [Atomic] Rat mcl(List<Int> microserviceInstances) {
+        Rat mcl = 0;
+        Int i = 0;
+        while(i < length(microserviceInstances)) {
+            Rat n_inst = nth(microserviceInstances,i);
+            Rat handled_frequency = n_inst * nth(serviceMCLs(),i) / nth(serviceMFs(),i);
+            if(handled_frequency < mcl || mcl == 0){mcl = handled_frequency;}
+            i = i + 1;
+        }
+        return mcl;
+    }
+
+    List<Int> vSum(List<Int> v1, List<Int> v2) {
+        List<Int> res = list[];
+        while(!isEmpty(v1) && !isEmpty(v2)) {
+            res = appendright(res, head(v1) + head(v2));
+            v1 = tail(v1);
+            v2 = tail(v2);
+        }
+        return res;
+    }
+
+    List<Int> createEmpty(Int nDeltas) {
+        List<Int> empty = list[];
+        while(nDeltas > 0) { empty = appendright(empty, 0); nDeltas = nDeltas - 1;}
+        return empty;
+    }
+
+   [Atomic] Int instances(List<Int> ls) {
+    Int ret = 0;
+    foreach (l in ls) ret = ret + l;
+    return ret;
+   }
+
+
+    List<Int> incDeltas(Int index, List<Int> configDeltas) {
+        List<Int> vals = list[];
+        Int i = 0;
+        while (i < length(configDeltas)) {
+            Int curr = nth(configDeltas, i);
+            if (index == i) curr = curr + 1;
+            vals = appendright(vals, curr);
+            i = i + 1;
+        }
+        return vals;
+    }
+
+    Rat sum(List<Rat> ls) {
+        Rat res = 0;
+        foreach (v in ls) res = res + v;
+        return res;
+    }
+}

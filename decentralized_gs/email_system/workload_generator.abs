@@ -1,0 +1,28 @@
+module WorkloadGenerator;
+
+export *;
+import * from Architecture;
+import * from Param;
+ 
+
+
+
+interface WorkloadGeneratorInterface {}
+
+class WorkloadGenerator(MessageReceiver_LoadBalancerInterface receiver) implements WorkloadGeneratorInterface {
+
+    Int i = 0;
+
+    Unit run() {
+        while(i < n_cycles() * length(workload())) {
+            Rat curr = nth(workload(), i);
+            i = (i + 1) % length(workload());
+            Int j = 0;
+            while(j < curr) {
+                receiver!newRequest("Message");
+                await duration(sendingWin() * time_unit_to_sec() / curr);
+                j = j + 1;
+            }
+        }
+    }
+}
