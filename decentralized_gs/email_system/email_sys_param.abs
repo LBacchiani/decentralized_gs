@@ -15,7 +15,7 @@ def Bool proactiveness() = False;
 def Bool mixing() = proactiveness() && True;
 def List<Rat> scores() = list[60/330, 90/330, 90/330, 90/330];
 
-def Int buffer_size() = 500;
+def Int buffer_size() = 350;
 def String global_service_name() = "system";
 def List<String> services() = list["MessageReceiver", "Parser", "Header", "Link", "Text", "SentimentAnalyser", "VirusScanner", "AttachmentsManager", "ImageAnalyser", "NSFWDetector", "ImageRecognizer", "MessageAnalyser"];
 def List<Rat> serviceMCLs() = list[116,110,1000000000,1000000000,1000000000,100,120,231,231,90,90,300];

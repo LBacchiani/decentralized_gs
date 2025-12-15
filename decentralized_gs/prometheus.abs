@@ -33,10 +33,10 @@ class DiscreteMetric(Pair<String,String> id) implements Metric {
     [Atomic] Unit push(Rat val)  { 
         Int current_window = floor(float(timeValue(now()) / monitoring_window())); 
         Int live_window = snd(live);
-        // if (live_window < current_window) {
-        //     snapshot = live;
-        //     live = Pair(0,current_window);
-        // }
+        if (live_window < current_window) {
+            snapshot = live;
+            live = Pair(0,current_window);
+        }
         live = Pair(fst(live) + val, snd(live));
     }
 }

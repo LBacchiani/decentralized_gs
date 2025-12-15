@@ -17,7 +17,7 @@ class Monitor(PrometheusInterface prom) {
     
     {
         logger = new local Logger();
-        logger!log(time,map[Pair("inst" + global_service_name(), foldl((Int v, Int acc) => v + acc)(base_config(),0))]); //fix me
+        logger!log(time,map[Pair("inst" + global_service_name(), foldl((Int v, Int acc) => v + acc)(base_config(),0))], base_config()); //fix me
     }
 
     Unit run() {
@@ -25,17 +25,19 @@ class Monitor(PrometheusInterface prom) {
             await duration(monitoring_window() * time_unit_to_sec());
             time = time + 1;
             Map<String,Rat> metrics = map[];
+            List<Rat> config = list[];
             foreach (m in service_metrics()) {
                 foreach (s in services()) {
                     Rat val = await prom!getV(m, s);
                     metrics = put(metrics, m + s, val);
+                    if (m == "inst") config = appendright(config, val);
                 }
             }
             foreach (m in global_metrics()) {
                 Rat val = await prom!getV(m, global_service_name());
                 metrics = put(metrics, m + global_service_name(), val);
             }
-            logger.log(time, metrics);
+            logger!log(time, metrics, config);
         }
     }
 }

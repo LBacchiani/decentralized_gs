@@ -44,7 +44,6 @@ class DecentralizedScaler(Int serviceType, Int minReplicas, CloudProvider cp, Pr
     Unit run() {
         while (time < cycles() && !failed) {
             await duration(monitoring_window() * time_unit_to_sec());
-            instances!push(replicas);
             time = time + 1;
             Fut<Rat> fut_total_global = prometheus!getV("tot", global_service_name());
             Fut<Rat> fut_total_completed = prometheus!getV("comp", nth(services(), 0));
@@ -65,16 +64,16 @@ class DecentralizedScaler(Int serviceType, Int minReplicas, CloudProvider cp, Pr
             total_completed = total_completed / monitoring_window();
             total_local = total_local / monitoring_window();
             completed = completed / monitoring_window();
+            Rat slo = min(when total_local != 0 then completed / total_local else 1,1);
             this.learnMCL(completed, replicas);
             this.learnMF(total_completed, total_local);
             Rat curr_mf = when total_completed != 0 then total_local / total_completed else 0;
-            Rat slo = min(when total_local != 0 then completed / total_local else 1,1);
             Rat avg_mf = mf_history / time;
-            Int target_replicas = max(when mcl != 0 then ceil(float(avg_mf * total_global / mcl)) else 0, minReplicas);
-            println(nth(services(), serviceType) + " T: " + toString(time) + " C: " + toString(float(completed)) + " TG: " + toString(float(total_global)) + " TL: " + toString(float(total_local)) + " MCL: " + toString(float(mcl)) + " AVG MF: " + toString(float(avg_mf)) + " CURR MF: " + toString(float(curr_mf)) + " TRep: " + toString(target_replicas) + " CRep: " + toString(replicas) + " SLO: " + toString(float(slo)) + " LOSS: " + toString(loss));
-            if (target_replicas > replicas && slo < slo()) {
+            Int target_replicas = max(when mcl != 0 then ceil(float(avg_mf * (total_global + kbig()) / mcl)) else 0, minReplicas);
+            if (target_replicas > replicas && slo * 100 < slo()) {
                 Int toAdd = target_replicas - replicas;
                 replicas = replicas + toAdd;
+                instances!push(replicas);
                 Int i = 0;
                 while (i < toAdd) {
                     this!deploy();
@@ -83,12 +82,14 @@ class DecentralizedScaler(Int serviceType, Int minReplicas, CloudProvider cp, Pr
             } else if (target_replicas < replicas) {
                 Int toRemove = replicas - target_replicas;
                 replicas = replicas - toRemove;
+                instances!push(replicas);
                 Int i = 0;
                 while (i < toRemove) {
                     this!undeploy();
                     i = i + 1;
                 }
             }
+            println(nth(services(), serviceType) + " T: " + toString(time) + " C: " + toString(float(completed)) + " TG: " + toString(float(total_global)) + " TL: " + toString(float(total_local)) + " MCL: " + toString(float(mcl)) + " AVG MF: " + toString(float(avg_mf)) + " CURR MF: " + toString(float(curr_mf)) + " Rep: " + toString(replicas) + " SLO: " + toString(float(slo)) + " LOSS: " + toString(loss));
         }
     }
 
@@ -100,51 +101,51 @@ class DecentralizedScaler(Int serviceType, Int minReplicas, CloudProvider cp, Pr
         DeploymentComponent dc = await cp!launchInstance(map[Pair(Speed, speed_per_core() * cores)]);
         if (serviceType == 0) {
             [DC: dc] MessageReceiverInterface mr = new MessageReceiver(prometheus, mpLB);
-            mrLB.connectInstance(mr);
+            mrLB!connectInstance(mr);
         } 
         if (serviceType == 1) {
             [DC: dc] MessageParserInterface mp = new MessageParser(prometheus, haLB, laLB, taLB, vsLB, maLB, db);
-            mpLB.connectInstance(mp);
+            mpLB!connectInstance(mp);
         } 
         if (serviceType == 2) {
             [DC: dc] HeaderAnalyserInterface ha = new HeaderAnalyser(prometheus, maLB);
-            haLB.connectInstance(ha);
+            haLB!connectInstance(ha);
         }  
         if (serviceType == 3) {
             [DC: dc] LinkAnalyserInterface la = new LinkAnalyser(prometheus, maLB);
-            laLB.connectInstance(la);
+            laLB!connectInstance(la);
         }   
         if (serviceType == 4) {
             [DC: dc] TextAnalyserInterface ta = new TextAnalyser(prometheus, saLB, maLB);
-            taLB.connectInstance(ta);
+            taLB!connectInstance(ta);
         }  
         if (serviceType == 5) {
             [DC: dc] SentimentAnalyserInterface sa = new SentimentAnalyser(prometheus);
-            saLB.connectInstance(sa);
+            saLB!connectInstance(sa);
         }
         if (serviceType == 6) {
             [DC: dc] VirusScannerInterface vs = new VirusScanner(prometheus, amLB, maLB);
-            vsLB.connectInstance(vs);
+            vsLB!connectInstance(vs);
         }
         if (serviceType == 7) {
             [DC: dc] AttachmentsManagerInterface am = new AttachmentsManager(prometheus, iaLB);
-            amLB.connectInstance(am);
+            amLB!connectInstance(am);
         }
         if (serviceType == 8) {
             [DC: dc] ImageAnalyserInterface ia = new ImageAnalyser(prometheus, nsfwLB, irLB, maLB);
-            iaLB.connectInstance(ia);
+            iaLB!connectInstance(ia);
         }
         if (serviceType == 9) {
             [DC: dc] NSFWDetectorInterface nsfw = new NSFWDetector(prometheus);
-            nsfwLB.connectInstance(nsfw);
+            nsfwLB!connectInstance(nsfw);
         }
         if (serviceType == 10) {
             [DC: dc] ImageRecognizerInterface ir = new ImageRecognizer(prometheus);
-            irLB.connectInstance(ir);
+            irLB!connectInstance(ir);
         }
         if (serviceType == 11) {
             [DC: dc] MessageAnalyserInterface ma = new MessageAnalyser(prometheus, db);
-            maLB.connectInstance(ma);
+            maLB!connectInstance(ma);
         }
     }
 

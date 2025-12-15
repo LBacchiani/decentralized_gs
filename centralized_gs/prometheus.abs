@@ -10,7 +10,9 @@ import * from Param;
 interface Metric {
     [Atomic] Pair<String,String> id();
     Rat value(); 
+    List<Rat> vvalue();
    [Atomic] Unit push(Rat val);
+   [Atomic] Unit vpush(List<Rat> val);
    Unit flush();
 }
 
@@ -25,6 +27,9 @@ class DiscreteMetric(Pair<String,String> id) implements Metric {
     [Atomic] Unit push(Rat val)  { 
         value = value + val; 
     }  
+    [Atomic] Unit vpush(List<Rat> val) {}
+    List<Rat> vvalue() {return list[];}
+
 //    Rat value() {
 //         Int window = truncate(timeValue(now()) / monitoring_window());
 //         if (curr_window != window) {
@@ -48,10 +53,13 @@ class DiscreteMetric(Pair<String,String> id) implements Metric {
 
 class InstantMetric(Pair<String,String> id) implements Metric {
     Rat value = 0;
+    List<Rat> vvalue = list[];
     [Atomic] Pair<String,String> id() {return id;}
     Rat value() { return value; }
     [Atomic] Unit push(Rat val)  { value = val; }
     Unit flush() {}
+    [Atomic] Unit vpush(List<Rat> val) {vvalue = val;}
+    List<Rat> vvalue() {return vvalue;}
 }
 
 
@@ -61,6 +69,7 @@ interface PrometheusInterface {
     [Atomic] Unit register(List<Metric> ms);
     Rat getV(String metric, String key);
     Map<String,Rat> getAllV();
+    List<Rat> getVV(String metric, String key);
     Unit flush();
 }
 
@@ -102,6 +111,16 @@ class Prometheus() implements PrometheusInterface {
         foreach (m in ms) {
             Rat val = m.value();
             toRet = toRet + val;
+        }
+        return toRet;
+    }
+
+    List<Rat> getVV(String metric, String key) {
+        List<Metric> ms = lookupDefault(metrics,Pair(metric,key),list[]);
+        List<Rat> toRet = list[];//m.value();
+        foreach (m in ms) {
+            List<Rat> val = m.vvalue();
+            toRet = val;
         }
         return toRet;
     }

@@ -15,6 +15,7 @@ class GS_Scaler(List<WrapperScaleInterface> orchestrations, PrometheusInterface 
     List<Int> deployedDeltas = list[];
     Metric mclMetric;
     Metric instMetric;
+    Metric config;
     ActuationModuleInterface actuation; 
     List<Int> last_pred_config = list[0,0,0,0];
     List<Int> curr_config = base_config();
@@ -23,7 +24,8 @@ class GS_Scaler(List<WrapperScaleInterface> orchestrations, PrometheusInterface 
         actuation = new local ActuationModule();
         mclMetric = new local InstantMetric(Pair("supp",global_service_name()));
         instMetric = new local InstantMetric(Pair("inst", global_service_name()));
-        prom!register(list[mclMetric,instMetric]);
+        config = new local InstantMetric(Pair("config", global_service_name()));
+        prom!register(list[mclMetric,instMetric,config]);
         Int i = length(orchestrations);
         while (i > 0) {
             deployedDeltas = appendright(deployedDeltas,0);
@@ -33,6 +35,7 @@ class GS_Scaler(List<WrapperScaleInterface> orchestrations, PrometheusInterface 
         mclMetric!push(mcl);
         Rat inst = this.instances(base_config());
         instMetric!push(inst);
+        config!vpush(base_config());
     }
 
     Unit adapt(Map<String,Rat> metrics, Int time) {
@@ -55,6 +58,7 @@ class GS_Scaler(List<WrapperScaleInterface> orchestrations, PrometheusInterface 
         Rat mcl = this.mcl(curr_config);
         instMetric!push(instances);
         mclMetric!push(mcl);
+        config!vpush(curr_config);
         this!scale(configDeltas);
     }
 

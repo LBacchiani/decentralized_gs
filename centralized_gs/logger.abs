@@ -8,13 +8,13 @@ import * from Param;
 
 
 interface ILogger {
-    Unit log(Rat time, Rat start, Rat end, Map<String,Rat> metrics);
+    Unit log(Rat time, Rat start, Rat end, Map<String,Rat> metrics, List<Rat> config);
 }
 
 class Logger(PrometheusInterface prom) implements ILogger {
 
     
-    Unit log(Rat time, Rat start, Rat end, Map<String,Rat> metrics) {
+    Unit log(Rat time, Rat start, Rat end, Map<String,Rat> metrics, List<Rat> config) {
         Float total = float(lookupDefault(metrics,"tot" + global_service_name(),0));
         Float loss = float(lookupDefault(metrics,"rej" + global_service_name(),0));
         Float mcl = float(lookupDefault(metrics,"supp" + global_service_name(),0));
@@ -42,7 +42,7 @@ class Logger(PrometheusInterface prom) implements ILogger {
         //     Float tot = float(lookupDefault(metrics,"tot" + s,0));
         //     losses = losses + " " + s + " (tot: " + toString(tot) + " loss: " + toString(lossLocal) + ")";
         // }
-        println(toString(time * monitoring_window()) + " " + toString(avgLat * float(1000/time_unit_to_sec())) + proactive_log + " measured: " +  toString(float(rat(total)/monitoring_window())) + " tot: " + toString(total) + " comp: " + toString(completed) + " rej: " + toString(loss) + " supp: " + toString(mcl) + " inst: " + toString(inst));// + losses);
+        println(toString(time * monitoring_window()) + " " + toString(avgLat * float(1000/time_unit_to_sec())) + proactive_log + " measured: " +  toString(float(rat(total)/monitoring_window())) + " tot: " + toString(total) + " comp: " + toString(completed) + " rej: " + toString(loss) + " supp: " + toString(mcl) + " inst: " + toString(inst) + " config: " + toString(config));
 
     }
 
