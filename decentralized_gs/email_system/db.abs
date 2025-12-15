@@ -17,9 +17,9 @@ class DB(PrometheusInterface prometheus) implements DBInterface {
   Metric completed;
   Metric latency;
   {
-    completed = new local DiscreteMetric(Pair("comp",global_service_name()));
-    latency = new local DiscreteMetric(Pair("latency",global_service_name()));
-    loss = new local DiscreteMetric(Pair("rej",global_service_name()));
+    completed = new DiscreteMetric(Pair("comp",global_service_name()));
+    latency = new DiscreteMetric(Pair("latency",global_service_name()));
+    loss = new DiscreteMetric(Pair("rej",global_service_name()));
     prometheus!register(list[loss,completed,latency]);
   }
 
