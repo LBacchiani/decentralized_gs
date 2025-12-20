@@ -16,6 +16,8 @@ interface Metric {
 class DiscreteMetric(Pair<String,String> id) implements Metric {
     Pair<Rat,Int> live = Pair(0,0);
     Pair<Rat,Int> snapshot = Pair(0,0);
+    List<Rat> per_sec_history = list[];
+    Int curr_sec = 0; 
     
     [Atomic] Pair<String,String> id() {return id;}
     Rat value() {
@@ -32,6 +34,7 @@ class DiscreteMetric(Pair<String,String> id) implements Metric {
 
     [Atomic] Unit push(Rat val)  { 
         Int current_window = floor(float(timeValue(now()) / monitoring_window())); 
+        Int sec = floor(float(timeValue(now())));
         Int live_window = snd(live);
         if (live_window < current_window) {
             snapshot = live;
@@ -52,7 +55,9 @@ class InstantMetric(Pair<String,String> id) implements Metric {
 
 interface PrometheusInterface {
     [Atomic] Unit register(List<Metric> ms);
+    [Atomic] Unit unregister(List<Metric> ms);
     Rat getV(String metric, String key);
+    Rat maxV(String metric, String key);
 }
 
 class Prometheus() implements PrometheusInterface {
@@ -72,12 +77,34 @@ class Prometheus() implements PrometheusInterface {
         }
     }
 
+    [Atomic] Unit unregister(List<Metric> ms) {
+        foreach (m in ms) {
+            Pair<String,String> id = m.id();
+            if (contains(keys(metrics),id)) {
+                List<Metric> tmp = lookupUnsafe(metrics,id);
+                tmp = without(tmp,m);
+                metrics = put(metrics,id,tmp);
+            }
+            else metrics = put(metrics,id,list[m]);
+        }
+    }
+
     Rat getV(String metric, String key) {
         List<Metric> ms = lookupDefault(metrics,Pair(metric,key),list[]);
         Rat toRet = 0;
         foreach (m in ms) {
             Rat val = m.value();
             toRet = toRet + val;
+        }
+        return toRet;
+    }
+
+    Rat maxV(String metric, String key) {
+        List<Metric> ms = lookupDefault(metrics,Pair(metric,key),list[]);
+        Rat toRet = 0;
+        foreach (m in ms) {
+            Rat val = m.value();
+            if (toRet < val) toRet = val;
         }
         return toRet;
     }

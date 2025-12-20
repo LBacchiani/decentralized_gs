@@ -239,7 +239,7 @@ class Scale2(CloudProvider cloudProvider, MessageReceiver_LoadBalancerInterface 
 		speedPatchMap = put(speedPatchMap, c4_xlarge_2, fromJust(lookup(speedPatchMap,c4_xlarge_2)) + coreRequired_odefault___VirusScanner_0_c4_xlarge_2);
 		ls_VirusScannerInterface = Cons(odefault___VirusScanner_0_c4_xlarge_2, ls_VirusScannerInterface);
 		this!patchSpeed(speedPatchMap);
-		await duration(waiting_time,waiting_time);
+		//await duration(waiting_time,waiting_time);
 		nsfwDetector_LoadBalancerObj.connectInstance(odefault___NSFWDetector_0_c4_4xlarge_0);
 		nsfwDetector_LoadBalancerObj.connectInstance(odefault___NSFWDetector_0_c4_2xlarge_1);
 		sentimentAnalyser_LoadBalancerObj.connectInstance(odefault___SentimentAnalyser_0_c4_xlarge_1);

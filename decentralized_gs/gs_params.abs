@@ -8,8 +8,6 @@ import * from Param;
 
 def List<String> service_metrics() = list["tot", "rej", "inst"];
 def List<String> global_metrics() = list["tot", "comp", "latency", "supp", "inst", "rej"];
-def List<String> threshold_metrics() = list["tot","supp"];
-def Bool threshold(Map<String,Rat> threshold_metrics) = lookupUnsafe(threshold_metrics,"tot") - (lookupUnsafe(threshold_metrics,"supp") - kbig()) > k() || (lookupUnsafe(threshold_metrics,"supp") - kbig()) - lookupUnsafe(threshold_metrics,"tot") > k();
 
 
 def Int weightedChoice(Int n) =

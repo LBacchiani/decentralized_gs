@@ -9,12 +9,7 @@ import * from Param;
 import * from DB;
 
 data NodeState = Follower | Candidate | Leader;
-data LeaderStatus = LeaderStatus(
-    Rat mf_history,   // metrics per microservice
-    Rat mcl_history,  // metrics per microservice
-    Int numReplicas,               // number of replicas
-    List<DecentralizedScalerInterface> controlPlaneAddresses
-);
+
 
 interface DecentralizedScalerInterface {
     // Unit start();
@@ -23,77 +18,133 @@ interface DecentralizedScalerInterface {
     // Unit receiveHeartbeat(Int term, String leaderId, LeaderStatus status);
 }
 
-class DecentralizedScaler(Int serviceType, Int minReplicas, CloudProvider cp, PrometheusInterface prometheus, MessageReceiver_LoadBalancerInterface mrLB, MessageParser_LoadBalancerInterface mpLB, HeaderAnalyser_LoadBalancerInterface haLB, LinkAnalyser_LoadBalancerInterface laLB, TextAnalyser_LoadBalancerInterface taLB, SentimentAnalyser_LoadBalancerInterface saLB, VirusScanner_LoadBalancerInterface vsLB, AttachmentsManager_LoadBalancerInterface amLB, ImageAnalyser_LoadBalancerInterface iaLB, NSFWDetector_LoadBalancerInterface nsfwLB, ImageRecognizer_LoadBalancerInterface irLB, MessageAnalyser_LoadBalancerInterface maLB, DBInterface db, List<DecentralizedScalerInterface> peers) implements DecentralizedScalerInterface {
+class DecentralizedScaler(Int id, NodeState ns, Int serviceType, Int minReplicas, CloudProvider cp, PrometheusInterface prometheus, MessageReceiver_LoadBalancerInterface mrLB, MessageParser_LoadBalancerInterface mpLB, HeaderAnalyser_LoadBalancerInterface haLB, LinkAnalyser_LoadBalancerInterface laLB, TextAnalyser_LoadBalancerInterface taLB, SentimentAnalyser_LoadBalancerInterface saLB, VirusScanner_LoadBalancerInterface vsLB, AttachmentsManager_LoadBalancerInterface amLB, ImageAnalyser_LoadBalancerInterface iaLB, NSFWDetector_LoadBalancerInterface nsfwLB, ImageRecognizer_LoadBalancerInterface irLB, MessageAnalyser_LoadBalancerInterface maLB, DBInterface db, List<DecentralizedScalerInterface> peers) implements DecentralizedScalerInterface {
 
-    Bool failed = False;
-    Rat mf_history = 0;
-    Rat mcl = 0;
     Int time = 0;
+
+    ///scaling fields///
+    Bool failed = False;
+    Rat mcl = 0;//nth(serviceMCLs(),serviceType);
+    Rat mf = 0;//nth(serviceMFs(),serviceType);
     Int replicas = minReplicas;
     Metric instances;
+    List<Rat> mf_history = list[];
+    Int mf_history_size = 20;  
+    Int mf_samples = 0;
+    Rat prev_MCL = 0;
+    Int stable_windows = 0;
+    ///////////////////
+
+    ///RAFT fields///
+    NodeState state = ns;
+    Int current_term = 0;
+    Int votes_received = 0;
+    Int last_heartbeat_time = 0;
+    ///////////////////
     {
         instances = new local InstantMetric(Pair("inst", nth(services(), serviceType)));
         prometheus!register(list[instances]);
         instances!push(replicas);
     }
 
-    Unit helper() {
-        
+    Unit run() {
+        this!scalingLoop();
     }
 
-    Unit run() {
+    Unit scalingLoop() {
         while (time < cycles() && !failed) {
             await duration(monitoring_window() * time_unit_to_sec());
             time = time + 1;
             Fut<Rat> fut_total_global = prometheus!getV("tot", global_service_name());
-            Fut<Rat> fut_total_completed = prometheus!getV("comp", nth(services(), 0));
+            Fut<Rat> fut_completed_total = prometheus!getV("comp", nth(services(), 0));
             Fut<Rat> fut_loss = prometheus!getV("rej", nth(services(), serviceType));
+            Fut<Rat> fut_loss_global = prometheus!getV("rej", global_service_name());
             Fut<Rat> fut_total_local = prometheus!getV("tot", nth(services(), serviceType));
             Fut<Rat> fut_completed = prometheus!getV("comp", nth(services(), serviceType));
+            Fut<Rat> fut_max_compl = prometheus!maxV("comp", nth(services(), serviceType));
             await fut_total_global?;
-            await fut_total_completed?;
+            await fut_completed_total?;
             await fut_loss?;
             await fut_total_local?;
             await fut_completed?;
+            await fut_loss_global?;
+            await fut_max_compl?;
             Rat total_global = fut_total_global.get;
-            Rat total_completed = fut_total_completed.get;
-            Rat loss = fut_loss.get;
+            Rat completed_total = fut_completed_total.get;
+            Rat loss_local = fut_loss.get;
             Rat total_local = fut_total_local.get;
-            Rat completed = fut_completed.get;
+            Rat completed_local = fut_completed.get;
+            Rat loss_global = fut_loss_global.get;
+            Rat max_compl = fut_max_compl.get;
             total_global = total_global / monitoring_window();
-            total_completed = total_completed / monitoring_window();
+            completed_total = completed_total / monitoring_window();
             total_local = total_local / monitoring_window();
-            completed = completed / monitoring_window();
-            Rat slo = min(when total_local != 0 then completed / total_local else 1,1);
-            this.learnMCL(completed, replicas);
-            this.learnMF(total_completed, total_local);
-            Rat curr_mf = when total_completed != 0 then total_local / total_completed else 0;
-            Rat avg_mf = mf_history / time;
-            Int target_replicas = max(when mcl != 0 then ceil(float(avg_mf * (total_global + kbig()) / mcl)) else 0, minReplicas);
-            if (target_replicas > replicas && slo * 100 < slo()) {
-                Int toAdd = target_replicas - replicas;
-                replicas = replicas + toAdd;
-                instances!push(replicas);
-                Int i = 0;
-                while (i < toAdd) {
-                    this!deploy();
-                    i = i + 1;
-                }
-            } else if (target_replicas < replicas) {
-                Int toRemove = replicas - target_replicas;
-                replicas = replicas - toRemove;
-                instances!push(replicas);
-                Int i = 0;
-                while (i < toRemove) {
-                    this!undeploy();
-                    i = i + 1;
-                }
+            completed_local = completed_local / monitoring_window();
+            max_compl = max_compl / monitoring_window();
+            Rat local_slo = min(when total_local != 0 then completed_local / total_local else 1,1);
+            if (loss_local > 0) {
+                this.learnMCL(completed_local, replicas);
+            } else {
+                prev_MCL = 0;
+                stable_windows = 0;
             }
-            println(nth(services(), serviceType) + " T: " + toString(time) + " C: " + toString(float(completed)) + " TG: " + toString(float(total_global)) + " TL: " + toString(float(total_local)) + " MCL: " + toString(float(mcl)) + " AVG MF: " + toString(float(avg_mf)) + " CURR MF: " + toString(float(curr_mf)) + " Rep: " + toString(replicas) + " SLO: " + toString(float(slo)) + " LOSS: " + toString(loss));
+            if (loss_global == 0) this.learnMF(completed_total, total_local);
+            Int target_replicas = 0;
+            if (mf != 0) {
+                target_replicas = this.computeConfigurationGlobalScaling(total_global, loss_local, local_slo);
+            } else {
+                target_replicas = max(when mcl != 0 then ceil(float(total_local / mcl)) else 0, minReplicas); //local scaling backup
+            }
+            if (state == Leader) {
+                this.scale(target_replicas);
+                Float supp = when mf != 0 then float(mcl * replicas / mf) else 0.0;
+                println(nth(services(), serviceType) + " T: " + toString(time) + " C: " + toString(float(completed_local)) + " TG: " + toString(float(total_global)) + " TL: " + toString(float(total_local)) + " MCL: " + toString(float(mcl)) + " AVG MF: " + toString(float(mf)) + " CURR MF: " + toString(float(when completed_total != 0 then total_local / completed_total else 0)) + " Rep: " + toString(replicas) + " SLO: " + toString(float(local_slo)) + " LOSS: " + toString(loss_local) + " SUPP: " + toString(supp));
+            } else {
+                replicas = target_replicas;
+            }
         }
     }
 
     Unit fail() { failed = True;}
+
+    Int computeConfigurationGlobalScaling(Rat total_global, Rat loss_local, Rat local_slo) {
+        Rat safe_margin = total_global + kbig();
+        Int target_replicas = max(when mcl != 0 then ceil(float(mf * safe_margin / mcl)) else 0, minReplicas);
+        if (mcl != 0 && mf != 0) {
+            Rat overall_mcl_req_s = target_replicas * mcl / mf;
+            Rat usage = total_global / overall_mcl_req_s; 
+            if (usage > 90/100) target_replicas = target_replicas + 1;
+            // if (usage > 97/100 && loss_local == 0) target_replicas = target_replicas + 1;
+            // if (loss_local > 0) {
+            //     Int backlog_increment = ceil(float(buffer_size() / mcl)); // only scale half backlog
+            //     backlog_increment = min(backlog_increment, 3);    // clamp between 1 and 3 instances
+            //     target_replicas = target_replicas + backlog_increment;
+            // }
+        }
+        return target_replicas;
+    }
+
+    Unit scale(Int target_replicas) {
+        if (target_replicas > replicas) {
+            Int toAdd = target_replicas - replicas;
+            replicas = replicas + toAdd;
+            instances!push(replicas);
+            Int i = 0;
+            while (i < toAdd) {
+                this!deploy();
+                i = i + 1;
+            }
+        } else if (target_replicas < replicas) {
+            Int toRemove = replicas - target_replicas;
+            replicas = replicas - toRemove;
+            instances!push(replicas);
+            Int i = 0;
+            while (i < toRemove) {
+                this!undeploy();
+                i = i + 1;
+            }
+        }
+    }
 
 
     Unit deploy() {
@@ -179,18 +230,118 @@ class DecentralizedScaler(Int serviceType, Int minReplicas, CloudProvider cp, Pr
         }
     }
 
-    Unit learnMCL(Rat completed, Int replicas) {
-        Rat curr_mcl = completed / replicas;
-        mcl = max(mcl, curr_mcl);
+    Unit learnMCL(Rat completed_local, Int replicas) {
+        // Calculate current MCL per instance per second
+        Rat current_MCL = completed_local / replicas;
+        
+        // Check if this is not the first overload observation
+        if (prev_MCL > 0) {
+            // Calculate relative change between current and previous MCL
+            Rat relative_change = abs(current_MCL - prev_MCL) / prev_MCL;
+            
+            // Check if MCL is stable (< 10% change)
+            if (relative_change < 10/100) {
+                stable_windows = stable_windows + 1;
+                
+                // If stable for 2 consecutive windows, record MCL
+                if (stable_windows >= 2) {
+                    // Take average of the two stable observations for accuracy
+                    Rat stable_mcl = (prev_MCL + current_MCL) / 2;
+                    
+                    // Monotonic increase: only update if new value is higher
+                    if (stable_mcl > mcl) {
+                        mcl = stable_mcl;
+                    }
+                    
+                    // Reset stable window counter after recording
+                    // (keep tracking for potential future increases)
+                    stable_windows = 0;
+                }
+            } else {
+                // MCL not stable, reset counter
+                stable_windows = 0;
+            }
+        }
+        
+        // Update previous MCL for next iteration
+        prev_MCL = current_MCL;
     }
+    
 
-    Unit learnMF(Rat total_completed, Rat total_local) {
+    Unit learnMF(Rat completed_total, Rat total_local) {
         Rat curr_mf = 0;
         if (serviceType == 0) {
-            curr_mf = 1;
+            mf = 1;
         } else {
-            curr_mf = when total_completed != 0 then total_local / total_completed else 0;
+            curr_mf = when completed_total != 0 then total_local / completed_total else 0;
+
+            // Insert new value: always append to end
+            mf_history = appendright(mf_history, curr_mf);
+
+            // If history too long, drop the oldest (first element)
+            if (length(mf_history) > mf_history_size) {
+                mf_history = tail(mf_history);
+            }
+
+            // Early bootstrap: use raw value until enough samples
+            if (length(mf_history) < 5) {
+                Rat summed = foldl((Rat x, Rat a) => x + a)(mf_history,0);
+                mf = summed / length(mf_history);            
+            } else {
+                // Sort the current history
+                List<Rat> sorted = this.quicksort(mf_history);
+
+                // Compute trimmed mean (trim 10% from each end)
+                Int n = length(sorted);
+                Int trim_count = floor(float(n * 10 / 100));  // floor for conservative trim
+
+                // Build middle list manually
+                List<Rat> middle = list[];
+                Int i = trim_count;
+                while (i < n - trim_count) {
+                    middle = appendright(middle, nth(sorted, i));
+                    i = i + 1;
+                }
+
+                // Compute average of middle part (fall back to median if empty)
+                Rat trimmed_mean = 0;
+                if (length(middle) == 0) {
+                    trimmed_mean = nth(sorted, floor(float(n / 2)));  // median
+                } else {
+                    Rat sum = 0;
+                    foreach (v in middle) {
+                        sum = sum + v;
+                    }
+                    trimmed_mean = sum / length(middle);
+                }
+                // Final slow EMA on the trimmed mean for smooth adaptation
+                if (mf_samples == 0) {
+                    mf = trimmed_mean;
+                } else {
+                    Rat final_alpha = 2/10; 
+                    mf = final_alpha * trimmed_mean + (1 - final_alpha) * mf;
+                }
+            }
+            mf_samples = mf_samples + 1;
         }
-        mf_history = mf_history + curr_mf; 
+    }
+
+    List<Rat> quicksort(List<Rat> xs) {
+        List<Rat> result = list[];
+        if (length(xs) <= 1) {
+            result = xs;
+        } else {
+            Rat pivot = nth(xs, 0);
+            List<Rat> left = filter((Rat x) => x <= pivot)(tail(xs));
+            List<Rat> right = filter((Rat x) => x > pivot)(tail(xs));
+            List<Rat> sorted_left = this.quicksort(left);
+            List<Rat> sorted_right = this.quicksort(right);
+            result = sorted_left;
+            result = appendright(result,pivot);
+            foreach (x in sorted_right) {
+                result = appendright(result, x);
+            }
+        }
+        return result;
     }
 }

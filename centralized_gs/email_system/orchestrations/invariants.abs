@@ -251,7 +251,7 @@ class InvariantsDeployer(CloudProvider cloudProvider, PrometheusInterface promet
 		speedPatchMap = put(speedPatchMap, c4_large_6, fromJust(lookup(speedPatchMap,c4_large_6)) + coreRequired_odefault___ImageRecognizer_LoadBalancer_0_c4_large_6);
 		ls_ImageRecognizer_LoadBalancerInterface = Cons(odefault___ImageRecognizer_LoadBalancer_0_c4_large_6, ls_ImageRecognizer_LoadBalancerInterface);
 		this!patchSpeed(speedPatchMap);
-		await duration(waiting_time,waiting_time);
+		//await duration(waiting_time,waiting_time);
 	}
 
 	Unit undeploy_aux() {

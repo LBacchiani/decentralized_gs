@@ -45,7 +45,6 @@ class MessageReceiver_LoadBalancer(PrometheusInterface prometheus, DBInterface d
     globalTotal!push(1);
     total!push(1);
     if(pending < buffer_size()) {
-      localLoss!push(0);
       nextInstance = (nextInstance + 1) % length(instancesConnected);
       MessageReceiverInterface selectedInstance = nth(instancesConnected, nextInstance);
       pending = pending + 1;
@@ -122,7 +121,7 @@ class MessageParser_LoadBalancer(PrometheusInterface prometheus, DBInterface db)
     total!push(1);
     if (pending < buffer_size()) {
       pending = pending + 1;
-      localLoss!push(0);
+      
       nextInstance = (nextInstance + 1) % length(instancesConnected);  
       MessageParserInterface selectedInstance = nth(instancesConnected, nextInstance);
       selectedInstance!parseMessage(id, received_at, this);
@@ -199,6 +198,7 @@ interface HeaderAnalyserInterface {
 
 class HeaderAnalyser(PrometheusInterface prometheus, MessageAnalyser_LoadBalancerInterface messageAnalyserLoadBalancer) implements HeaderAnalyserInterface {
   Unit analyzeHeaders (String messageId, Rat received_at) {
+    await duration(time_unit_to_sec()/1000);
     messageAnalyserLoadBalancer!insertResult(messageId, received_at);
   }
 }
@@ -233,6 +233,7 @@ interface LinkAnalyserInterface {
 
 class LinkAnalyser(PrometheusInterface prometheus, MessageAnalyser_LoadBalancerInterface messageAnalyserLoadBalancer) implements LinkAnalyserInterface {
   Unit analyzeLink (String messageId, Rat received_at) {
+    await duration(time_unit_to_sec()/1000);
     messageAnalyserLoadBalancer!insertResult(messageId, received_at);
   }
 }
@@ -268,6 +269,7 @@ interface TextAnalyserInterface {
 class TextAnalyser(PrometheusInterface prometheus, SentimentAnalyser_LoadBalancerInterface sentimentAnalayserLoadBalancer, MessageAnalyser_LoadBalancerInterface messageAnalyserLoadBalancer) implements TextAnalyserInterface {
 
   Unit analyzeText (String messageId, Rat received_at) {
+    await duration(time_unit_to_sec()/1000);
     Bool refused = False;
     Int n_text_blocks = random(4) + 1;
     List<Maybe<Fut<String>>> futList = list[];
@@ -322,7 +324,7 @@ class SentimentAnalyser_LoadBalancer(PrometheusInterface prometheus, DBInterface
       total!push(1);
       if(pending < buffer_size()) {
         pending = pending + 1;
-        localLoss!push(0);
+        
         nextInstance = (nextInstance + 1) % length(instancesConnected);
         SentimentAnalyserInterface selectedInstance = nth(instancesConnected, nextInstance);
         Fut<String> fut = selectedInstance!analyzeSentiments(this);
@@ -390,7 +392,7 @@ class VirusScanner_LoadBalancer(PrometheusInterface prometheus, DBInterface db) 
     total!push(1);
     if (pending < buffer_size()) {
       pending = pending + 1;
-      localLoss!push(0);
+      
       nextInstance = (nextInstance + 1) % length(instancesConnected);  
       VirusScannerInterface selectedInstance = nth(instancesConnected, nextInstance);
       selectedInstance!scanAttachment(messageId,received_at,this);
@@ -465,7 +467,7 @@ class AttachmentsManager_LoadBalancer(PrometheusInterface prometheus, DBInterfac
   Unit newRequest(String messageId, Rat received_at){
     total!push(1);
     if (pending < buffer_size()) {
-      localLoss!push(0);
+      
       pending = pending + 1;
       nextInstance = (nextInstance + 1) % length(instancesConnected);  
       AttachmentsManagerInterface selectedInstance = nth(instancesConnected, nextInstance);      
@@ -540,7 +542,7 @@ class ImageAnalyser_LoadBalancer(PrometheusInterface prometheus, DBInterface db)
 
     if (pending < buffer_size()) {
       pending = pending + 1;
-      localLoss!push(0);
+      
       nextInstance = (nextInstance + 1) % length(instancesConnected);  
       ImageAnalyserInterface selectedInstance = nth(instancesConnected, nextInstance);      
       selectedInstance!analyzeImage(messageId, received_at, this);
@@ -616,7 +618,7 @@ class NSFWDetector_LoadBalancer(PrometheusInterface prometheus, DBInterface db) 
     total!push(1);
     if(pending < buffer_size()) {
       pending = pending + 1;
-      localLoss!push(0);
+      
       nextInstance = (nextInstance + 1) % length(instancesConnected);
       NSFWDetectorInterface selectedInstance = nth(instancesConnected, nextInstance);
       Fut<Bool> fut = selectedInstance!nsfwDetection(this);
@@ -686,7 +688,7 @@ class ImageRecognizer_LoadBalancer(PrometheusInterface prometheus, DBInterface d
     total!push(1);
     if(pending < buffer_size()) {
       pending = pending + 1;
-      localLoss!push(0);
+      
       nextInstance = (nextInstance + 1) % length(instancesConnected);
       ImageRecognizerInterface selectedInstance = nth(instancesConnected, nextInstance);
       Fut<String> fut = selectedInstance!recognizeImage(this);
@@ -758,7 +760,7 @@ class MessageAnalyser_LoadBalancer(PrometheusInterface prometheus,DBInterface db
 
     if (pending < buffer_size()) {
       pending = pending + 1;
-      localLoss!push(0);
+      
       nextInstance = (nextInstance + 1) % length(instancesConnected);  
       MessageAnalyserInterface selectedInstance = nth(instancesConnected, nextInstance);
       selectedInstance!insertResult(id,received_at,this);

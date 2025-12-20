@@ -8,37 +8,37 @@ import * from Param;
 import * from Actuation;
 
 interface AdaptationAlgorithm {
-    Unit adapt(Map<String,Rat> metrics, Int time);
+    List<Int> adapt(Map<String,Rat> metrics, Int time);
 }
 
 class GS_Scaler(List<WrapperScaleInterface> orchestrations, PrometheusInterface prom) implements AdaptationAlgorithm {
     List<Int> deployedDeltas = list[];
-    Metric mclMetric;
-    Metric instMetric;
-    Metric config;
+    // Metric mclMetric;
+    // Metric instMetric;
+    // Metric config;
     ActuationModuleInterface actuation; 
     List<Int> last_pred_config = list[0,0,0,0];
     List<Int> curr_config = base_config();
 
     {
         actuation = new local ActuationModule();
-        mclMetric = new local InstantMetric(Pair("supp",global_service_name()));
-        instMetric = new local InstantMetric(Pair("inst", global_service_name()));
-        config = new local InstantMetric(Pair("config", global_service_name()));
-        prom!register(list[mclMetric,instMetric,config]);
+        // mclMetric = new local InstantMetric(Pair("supp",global_service_name()));
+        // instMetric = new local InstantMetric(Pair("inst", global_service_name()));
+        // config = new local InstantMetric(Pair("config", global_service_name()));
+        // prom!register(list[mclMetric,instMetric,config]);
         Int i = length(orchestrations);
         while (i > 0) {
             deployedDeltas = appendright(deployedDeltas,0);
             i = i - 1;
         }
-        Rat mcl = this.mcl(base_config());
-        mclMetric!push(mcl);
-        Rat inst = this.instances(base_config());
-        instMetric!push(inst);
-        config!vpush(base_config());
+        // Rat mcl = this.mcl(base_config());
+        // mclMetric!push(mcl);
+        // Rat inst = this.instances(base_config());
+        // instMetric!push(inst);
+        // config!vpush(base_config());
     }
 
-    Unit adapt(Map<String,Rat> metrics, Int time) {
+    List<Int> adapt(Map<String,Rat> metrics, Int time) {
         Rat measured = lookupUnsafe(metrics,"tot" + global_service_name())/monitoring_window();
         Rat target = measured;
         if (proactiveness()) {
@@ -54,12 +54,12 @@ class GS_Scaler(List<WrapperScaleInterface> orchestrations, PrometheusInterface 
             }
         }
         List<Int> configDeltas = this.computeConfiguration(target);
-        Int instances = this.instances(curr_config);
-        Rat mcl = this.mcl(curr_config);
-        instMetric!push(instances);
-        mclMetric!push(mcl);
-        config!vpush(curr_config);
+        // Int instances = this.instances(curr_config);
+        // Rat mcl = this.mcl(curr_config);
+        // instMetric!push(instances);
+        // mclMetric!push(mcl);
         this!scale(configDeltas);
+        return curr_config;
     }
 
     Unit scale(List<Int> configDeltas) {

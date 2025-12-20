@@ -18,15 +18,13 @@ class Monitor(PrometheusInterface prom, AdaptationAlgorithm alg) {
     
     {
         logger = new local Logger(prom);
-        logger!log(time,0,0,map[Pair("inst" + global_service_name(), foldl((Int v, Int acc) => v + acc)(base_config(),0))], base_config()); //fix me
+        logger!log(time,map[Pair("inst" + global_service_name(), foldl((Int v, Int acc) => v + acc)(base_config(),0))], base_config()); //fix me
     }
 
     Unit run() {
         while(time < cycles()) {
             await duration(monitoring_window() * time_unit_to_sec());
             time = time + 1;
-            Rat start = timeValue(now()) - (monitoring_window() * time_unit_to_sec());
-            Rat end = timeValue(now());
             // Map<String,Rat> metrics = prom.getAllV();
             Map<String,Rat> metrics = map[];
             foreach (m in service_metrics()) {
@@ -38,12 +36,10 @@ class Monitor(PrometheusInterface prom, AdaptationAlgorithm alg) {
             foreach (m in global_metrics()) {
                 Rat val = await prom!getV(m, global_service_name());
                 metrics = put(metrics, m + global_service_name(), val);
-            }
-            List<Rat> config = await prom!getVV("config", global_service_name());
-           
+            }           
             prom!flush();
-            alg!adapt(metrics,time);        
-            logger!log(time,start,end,metrics, config);
+            List<Int> config = alg.adapt(metrics,time);        
+            logger!log(time, metrics, config);
         }
     }
 }

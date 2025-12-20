@@ -8,17 +8,17 @@ import * from Param;
 
 
 interface ILogger {
-    Unit log(Rat time, Rat start, Rat end, Map<String,Rat> metrics, List<Rat> config);
+    Unit log(Rat time, Map<String,Rat> metrics, List<Int> config);
 }
 
 class Logger(PrometheusInterface prom) implements ILogger {
 
     
-    Unit log(Rat time, Rat start, Rat end, Map<String,Rat> metrics, List<Rat> config) {
+    Unit log(Rat time, Map<String,Rat> metrics, List<Int> config) {
         Float total = float(lookupDefault(metrics,"tot" + global_service_name(),0));
         Float loss = float(lookupDefault(metrics,"rej" + global_service_name(),0));
-        Float mcl = float(lookupDefault(metrics,"supp" + global_service_name(),0));
-        Float inst = float(lookupDefault(metrics,"inst" + global_service_name(),0));
+        Float mcl = this.mcl(config);
+        Int inst = this.sum(config);
         Float completed = when lookupDefault(metrics,"comp" + global_service_name(),0) == 0 then -1.0 else float(lookupDefault(metrics,"comp" + global_service_name(),0));
         Float next = 0.0;
         Float mixed = 0.0;
@@ -50,5 +50,18 @@ class Logger(PrometheusInterface prom) implements ILogger {
         Int s = 0;
         foreach (v in vs) s = s + v;
         return s;
+    }
+
+
+    Float mcl(List<Int> microserviceInstances) {
+        Rat mcl = 0;
+        Int i = 0;
+        while(i < length(microserviceInstances)) {
+            Rat n_inst = nth(microserviceInstances,i);
+            Rat handled_frequency = n_inst * nth(serviceMCLs(),i) / nth(serviceMFs(),i);
+            if(handled_frequency < mcl || mcl == 0){mcl = handled_frequency;}
+            i = i + 1;
+        }
+        return float(mcl);
     }
 }

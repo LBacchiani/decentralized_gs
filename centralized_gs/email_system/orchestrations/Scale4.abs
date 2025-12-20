@@ -243,7 +243,7 @@ class Scale4(CloudProvider cloudProvider, MessageReceiver_LoadBalancerInterface 
 		speedPatchMap = put(speedPatchMap, c4_large_0, fromJust(lookup(speedPatchMap,c4_large_0)) + coreRequired_odefault___MessageReceiver_0_c4_large_0);
 		ls_MessageReceiverInterface = Cons(odefault___MessageReceiver_0_c4_large_0, ls_MessageReceiverInterface);
 		this!patchSpeed(speedPatchMap);
-		await duration(waiting_time,waiting_time);
+		//await duration(waiting_time,waiting_time);
 		imageRecognizer_LoadBalancerObj.connectInstance(odefault___ImageRecognizer_0_c4_4xlarge_0);
 		imageRecognizer_LoadBalancerObj.connectInstance(odefault___ImageRecognizer_0_c4_2xlarge_0);
 		sentimentAnalyser_LoadBalancerObj.connectInstance(odefault___SentimentAnalyser_0_c4_xlarge_0);

@@ -226,6 +226,7 @@ interface HeaderAnalyserInterface {
 class HeaderAnalyser(MessageAnalyser_LoadBalancerInterface messageAnalyserLoadBalancer) implements HeaderAnalyserInterface {
 
   Unit analyzeHeaders (String messageId, Rat received_at) {
+    await duration(time_unit_to_sec()/1000);
     messageAnalyserLoadBalancer!insertResult(messageId, received_at);
   }
 }
@@ -262,6 +263,7 @@ interface LinkAnalyserInterface {
 [SmartDeployCost : "{\"class\" : \"LinkAnalyser\",\"scenarios\" : [{\"name\" : \"default\",\"provide\" : -1,\"cost\" : {\"Cores\" : 2,\"Memory\" : 200},\"sig\" : [{\"kind\" : \"require\",\"type\" : \"MessageAnalyser_LoadBalancerInterface\"}],\"methods\" : []}]}"]
 class LinkAnalyser(MessageAnalyser_LoadBalancerInterface messageAnalyserLoadBalancer) implements LinkAnalyserInterface {
   Unit analyzeLink (String messageId, Rat received_at) {
+    await duration(time_unit_to_sec()/1000);
     messageAnalyserLoadBalancer!insertResult(messageId, received_at);
   }
 }
@@ -299,6 +301,7 @@ interface TextAnalyserInterface {
 class TextAnalyser(SentimentAnalyser_LoadBalancerInterface sentimentAnalayserLoadBalancer, MessageAnalyser_LoadBalancerInterface messageAnalyserLoadBalancer) implements TextAnalyserInterface {
 
   Unit analyzeText (String messageId, Rat received_at) {
+    await duration(time_unit_to_sec()/1000);
     Bool refused = False;
     Int n_text_blocks = random(4) + 1;
     List<Maybe<Fut<String>>> futList = list[];
