@@ -11,45 +11,59 @@ interface Metric {
     [Atomic] Pair<String,String> id();
     Rat value(); 
    [Atomic] Unit push(Rat val);
-   Unit flush();
 }
 
 class DiscreteMetric(Pair<String,String> id) implements Metric {
-    Rat acc = 0;
-    Rat value = 0;
-    Int curr_window = truncate(timeValue(now()) / monitoring_window()); 
+    Pair<Rat,Int> live = Pair(0,0);
+    Pair<Rat,Int> snapshot = Pair(0,0);
+    List<Rat> per_sec_history = list[];
+    Int curr_sec = 0; 
+    
     [Atomic] Pair<String,String> id() {return id;}
-   Rat value() {
-        return value;
+    Rat value() {
+        Int current_window = floor(float(timeValue(now()) / monitoring_window())); 
+        Int live_window = snd(live);
+        Int snapshot_window = snd(snapshot);
+        if (live_window < current_window) {
+            snapshot = live;
+            live = Pair(0,current_window);
+
+        } 
+        return fst(snapshot); //when snapshot_window == current_window-1 then fst(snapshot) else fst(live);
     }
+
     [Atomic] Unit push(Rat val)  { 
-        value = value + val; 
-    }  
-    Unit flush() {value = 0;}
+        Int current_window = floor(float(timeValue(now()) / monitoring_window())); 
+        Int sec = floor(float(timeValue(now())));
+        Int live_window = snd(live);
+        if (live_window < current_window) {
+            snapshot = live;
+            live = Pair(0,current_window);
+        }
+        live = Pair(fst(live) + val, snd(live));
+    }
 }
 
 class InstantMetric(Pair<String,String> id) implements Metric {
     Rat value = 0;
-    List<Rat> vvalue = list[];
     [Atomic] Pair<String,String> id() {return id;}
     Rat value() { return value; }
     [Atomic] Unit push(Rat val)  { value = val; }
-    Unit flush() {}
 }
 
-
-
+//////////////////////////////////////////////////////////////////////
 
 interface PrometheusInterface {
     [Atomic] Unit register(List<Metric> ms);
+    [Atomic] Unit unregister(List<Metric> ms);
     Rat getV(String metric, String key);
-    Unit flush();
+    Rat maxV(String metric, String key);
 }
-
 
 class Prometheus() implements PrometheusInterface {
 
     Map<Pair<String,String>,List<Metric>> metrics = map[];
+    Int time = 0;
 
     [Atomic] Unit register(List<Metric> ms) {
         foreach (m in ms) {
@@ -63,24 +77,21 @@ class Prometheus() implements PrometheusInterface {
         }
     }
 
-    Map<String,Rat> getAllV() {
-        Map<String,Rat> unified_metrics = map[];
-        foreach (p in entries(metrics)) {
-            Pair<String,String> key = fst(p);
-            List<Metric> ms = snd(p);
-            Rat tot = 0;
-            foreach (m in ms) {
-                Rat val = m.value();
-                tot = tot + val;
+    [Atomic] Unit unregister(List<Metric> ms) {
+        foreach (m in ms) {
+            Pair<String,String> id = m.id();
+            if (contains(keys(metrics),id)) {
+                List<Metric> tmp = lookupUnsafe(metrics,id);
+                tmp = without(tmp,m);
+                metrics = put(metrics,id,tmp);
             }
-            unified_metrics = put(unified_metrics, fst(key) + snd(key), tot);
+            else metrics = put(metrics,id,list[m]);
         }
-        return unified_metrics;
     }
 
     Rat getV(String metric, String key) {
         List<Metric> ms = lookupDefault(metrics,Pair(metric,key),list[]);
-        Rat toRet = 0;//m.value();
+        Rat toRet = 0;
         foreach (m in ms) {
             Rat val = m.value();
             toRet = toRet + val;
@@ -88,10 +99,13 @@ class Prometheus() implements PrometheusInterface {
         return toRet;
     }
 
-
-    Unit flush() {
-            foreach (ms in values(metrics)) {
-                foreach(m in ms) m!flush();
+    Rat maxV(String metric, String key) {
+        List<Metric> ms = lookupDefault(metrics,Pair(metric,key),list[]);
+        Rat toRet = 0;
+        foreach (m in ms) {
+            Rat val = m.value();
+            if (toRet < val) toRet = val;
         }
+        return toRet;
     }
 }

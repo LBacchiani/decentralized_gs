@@ -69,9 +69,9 @@ class MessageReceiver_LoadBalancer(PrometheusInterface prometheus, DBInterface d
   Metric total;
 
   {
-    total = new local DiscreteMetric(Pair("tot","MessageReceiver"));
-    globalTotal = new local DiscreteMetric(Pair("tot",global_service_name()));
-    loss = new local DiscreteMetric(Pair("rej",global_service_name()));
+    total = new  DiscreteMetric(Pair("tot","MessageReceiver"));
+    globalTotal = new  DiscreteMetric(Pair("tot",global_service_name()));
+    loss = new  DiscreteMetric(Pair("rej",global_service_name()));
     prometheus!register(list[total,globalTotal,loss]);
   }
 
@@ -132,8 +132,8 @@ class MessageParser_LoadBalancer(PrometheusInterface prometheus, DBInterface db)
   Metric loss;
   Int pending = 0;
   {
-      total = new local DiscreteMetric(Pair("tot","Parser"));
-      loss = new local DiscreteMetric(Pair("rej",global_service_name()));
+      total = new  DiscreteMetric(Pair("tot","Parser"));
+      loss = new  DiscreteMetric(Pair("rej",global_service_name()));
       prometheus!register(list[total, loss]);
   }
 
@@ -338,7 +338,7 @@ class SentimentAnalyser_LoadBalancer(PrometheusInterface prometheus, DBInterface
   Metric total;
   Int pending = 0;
   {
-      total = new local DiscreteMetric(Pair("tot","SentimentAnalyser"));
+      total = new  DiscreteMetric(Pair("tot","SentimentAnalyser"));
       prometheus!register(list[total]);
   }
 
@@ -395,7 +395,7 @@ class VirusScanner_LoadBalancer(PrometheusInterface prometheus, DBInterface db) 
   Metric total;
   Int pending = 0;
   {
-      total = new local DiscreteMetric(Pair("tot","VirusScanner"));
+      total = new  DiscreteMetric(Pair("tot","VirusScanner"));
       prometheus!register(list[total]);
   }
 
@@ -464,7 +464,7 @@ class AttachmentsManager_LoadBalancer(PrometheusInterface prometheus, DBInterfac
   Metric total;
   Int pending = 0;
   {
-      total = new local DiscreteMetric(Pair("tot","AttachmentsManager"));
+      total = new  DiscreteMetric(Pair("tot","AttachmentsManager"));
       prometheus!register(list[total]);
   }
 
@@ -526,7 +526,7 @@ class ImageAnalyser_LoadBalancer(PrometheusInterface prometheus, DBInterface db)
   Metric total;
   Int pending = 0;
   {
-      total = new local DiscreteMetric(Pair("tot","ImageAnalyser"));
+      total = new  DiscreteMetric(Pair("tot","ImageAnalyser"));
       prometheus!register(list[total]);
   }
 
@@ -599,7 +599,7 @@ class NSFWDetector_LoadBalancer(PrometheusInterface prometheus, DBInterface db) 
   Int pending = 0;
   Metric total;
   {
-      total = new local DiscreteMetric(Pair("tot","NSFWDetector"));
+      total = new  DiscreteMetric(Pair("tot","NSFWDetector"));
       prometheus!register(list[total]);
   }
 
@@ -658,7 +658,7 @@ class ImageRecognizer_LoadBalancer(PrometheusInterface prometheus, DBInterface d
   Int pending = 0;
   Metric total;
   {
-      total = new local DiscreteMetric(Pair("tot","ImageRecognizer"));
+      total = new  DiscreteMetric(Pair("tot","ImageRecognizer"));
       prometheus!register(list[total]);
   }
 
@@ -716,7 +716,7 @@ class MessageAnalyser_LoadBalancer(PrometheusInterface prometheus,DBInterface db
   Metric total;
   Int pending = 0;
   {
-      total = new local DiscreteMetric(Pair("tot","MessageAnalyser"));
+      total = new  DiscreteMetric(Pair("tot","MessageAnalyser"));
       prometheus!register(list[total]);
   }
 

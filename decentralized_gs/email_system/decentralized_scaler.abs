@@ -98,7 +98,7 @@ class DecentralizedScaler(Int id, NodeState ns, Int serviceType, Int minReplicas
             if (state == Leader) {
                 this.scale(target_replicas);
                 Float supp = when mf != 0 then float(mcl * replicas / mf) else 0.0;
-                println(nth(services(), serviceType) + " T: " + toString(time) + " C: " + toString(float(completed_local)) + " TG: " + toString(float(total_global)) + " TL: " + toString(float(total_local)) + " MCL: " + toString(float(mcl)) + " AVG MF: " + toString(float(mf)) + " CURR MF: " + toString(float(when completed_total != 0 then total_local / completed_total else 0)) + " Rep: " + toString(replicas) + " SLO: " + toString(float(local_slo)) + " LOSS: " + toString(loss_local) + " SUPP: " + toString(supp));
+                // println(nth(services(), serviceType) + " T: " + toString(time) + " C: " + toString(float(completed_local)) + " TG: " + toString(float(total_global)) + " TL: " + toString(float(total_local)) + " MCL: " + toString(float(mcl)) + " AVG MF: " + toString(float(mf)) + " CURR MF: " + toString(float(when completed_total != 0 then total_local / completed_total else 0)) + " Rep: " + toString(replicas) + " SLO: " + toString(float(local_slo)) + " LOSS: " + toString(loss_local) + " SUPP: " + toString(supp));
             } else {
                 replicas = target_replicas;
             }
@@ -114,12 +114,6 @@ class DecentralizedScaler(Int id, NodeState ns, Int serviceType, Int minReplicas
             Rat overall_mcl_req_s = target_replicas * mcl / mf;
             Rat usage = total_global / overall_mcl_req_s; 
             if (usage > 90/100) target_replicas = target_replicas + 1;
-            // if (usage > 97/100 && loss_local == 0) target_replicas = target_replicas + 1;
-            // if (loss_local > 0) {
-            //     Int backlog_increment = ceil(float(buffer_size() / mcl)); // only scale half backlog
-            //     backlog_increment = min(backlog_increment, 3);    // clamp between 1 and 3 instances
-            //     target_replicas = target_replicas + backlog_increment;
-            // }
         }
         return target_replicas;
     }

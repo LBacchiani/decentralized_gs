@@ -14,9 +14,9 @@ class WorkloadGenerator(MessageReceiver_LoadBalancerInterface receiver) implemen
     Int i = 0;
 
     Unit run() {
-        while(i < length(workload())) {
+        while(i < n_cycles() * length(workload())) {
             Rat curr = nth(workload(), i);
-            i = i + 1; //(i + 1) % length(workload());
+            i = (i + 1) % length(workload());
             Int j = 0;
             while(j < curr) {
                 receiver!newRequest("Message");

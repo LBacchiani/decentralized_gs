@@ -6,7 +6,7 @@ export *;
 def Rat time_unit_to_sec() = 1; //1TU = 1s --> this is more second to time unit, change it
 def Rat monitoring_window() = 10;  //second
 def Rat sendingWin() = 1;
-def Int n_cycles() = 3;
+def Int n_cycles() = 5;
 def Rat cycles() = n_cycles() * length(workload()) / monitoring_window();
 def Int buffer_size() = 500;
 def Int kbig() = 20;

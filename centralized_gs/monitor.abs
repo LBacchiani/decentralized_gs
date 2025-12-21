@@ -17,7 +17,7 @@ class Monitor(PrometheusInterface prom, AdaptationAlgorithm alg) {
     ILogger logger;
     
     {
-        logger = new local Logger(prom);
+        logger = new Logger(prom);
         logger!log(time,map[Pair("inst" + global_service_name(), foldl((Int v, Int acc) => v + acc)(base_config(),0))], base_config()); //fix me
     }
 
@@ -37,7 +37,6 @@ class Monitor(PrometheusInterface prom, AdaptationAlgorithm alg) {
                 Rat val = await prom!getV(m, global_service_name());
                 metrics = put(metrics, m + global_service_name(), val);
             }           
-            prom!flush();
             List<Int> config = alg.adapt(metrics,time);        
             logger!log(time, metrics, config);
         }
