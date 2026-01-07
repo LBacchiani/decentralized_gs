@@ -6,7 +6,7 @@ export *;
 def Rat time_unit_to_sec() = 1; //1TU = 1s
 def Rat monitoring_window() = 10;  //second
 def Rat sendingWin() = 1;
-def Int n_cycles() = 5;
+def Int n_cycles() = 3;
 def Rat cycles() = n_cycles() * length(workload()) / monitoring_window();
 
 def Int memory() = 3; 

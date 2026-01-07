@@ -10,20 +10,19 @@ import * from Param;
 interface Metric {
     [Atomic] Pair<String,String> id();
     Rat value(); 
+    Rat p(Int index);
    [Atomic] Unit push(Rat val);
 }
 
 class DiscreteMetric(Pair<String,String> id) implements Metric {
     Pair<Rat,Int> live = Pair(0,0);
     Pair<Rat,Int> snapshot = Pair(0,0);
-    List<Rat> per_sec_history = list[];
-    Int curr_sec = 0; 
     
     [Atomic] Pair<String,String> id() {return id;}
+    Rat p(Int index) {return 0;}
     Rat value() {
         Int current_window = floor(float(timeValue(now()) / monitoring_window())); 
         Int live_window = snd(live);
-        Int snapshot_window = snd(snapshot);
         if (live_window < current_window) {
             snapshot = live;
             live = Pair(0,current_window);
@@ -31,10 +30,10 @@ class DiscreteMetric(Pair<String,String> id) implements Metric {
         } 
         return fst(snapshot); //when snapshot_window == current_window-1 then fst(snapshot) else fst(live);
     }
+    
 
     [Atomic] Unit push(Rat val)  { 
         Int current_window = floor(float(timeValue(now()) / monitoring_window())); 
-        Int sec = floor(float(timeValue(now())));
         Int live_window = snd(live);
         if (live_window < current_window) {
             snapshot = live;
@@ -48,7 +47,75 @@ class InstantMetric(Pair<String,String> id) implements Metric {
     Rat value = 0;
     [Atomic] Pair<String,String> id() {return id;}
     Rat value() { return value; }
+    Rat p(Int index) {return 0;}
     [Atomic] Unit push(Rat val)  { value = val; }
+}
+
+class LatencyMetric(Pair<String,String> id) implements Metric {
+    Pair<List<Rat>,Int> live = Pair(list[],0);
+    Pair<List<Rat>,Int> snapshot = Pair(list[],0);
+    Int max_samples = 500;  // Keep last 1000 samples for P99 calculation
+    Rat current_p = 0;
+    
+    [Atomic] Pair<String,String> id() {return id;}
+    
+    Rat value() { 
+        Rat toRet = this.p(50);
+        return toRet;
+    }
+    
+    Rat p(Int index) {        
+        Int current_window = floor(float(timeValue(now()) / monitoring_window())); 
+        Int live_window = snd(live);
+        if (live_window < current_window) {
+            snapshot = live;
+            live = Pair(list[],current_window);
+        }
+        List<Rat> latency_samples = fst(snapshot);
+        if (length(latency_samples) >= 100) {
+            List<Rat> sorted = this.quicksort(latency_samples);
+            Int n = length(sorted);
+            Int p_index = floor(float(n * index / 100));
+            current_p = nth(sorted, p_index);
+        } else {
+            current_p = when length(latency_samples) > 0 then nth(latency_samples, length(latency_samples) - 1) else 0;
+        }
+        return current_p;
+    }
+
+    
+    [Atomic] Unit push(Rat val)  { 
+        Int current_window = floor(float(timeValue(now()) / monitoring_window())); 
+        Int live_window = snd(live);
+        List<Rat> latency_samples = fst(live);
+        if (live_window < current_window) {
+            snapshot = live;
+            latency_samples = list[];
+            live = Pair(list[],current_window);
+        } else if (length(latency_samples) > max_samples) {
+            latency_samples = tail(latency_samples);
+        } 
+        live = Pair(appendright(latency_samples,val), snd(live));
+    }
+    
+    List<Rat> quicksort(List<Rat> xs) {
+        List<Rat> result = list[];
+        if (length(xs) <= 1) {
+            result = xs;
+        } else {
+            Rat pivot = nth(xs, 0);
+            List<Rat> left = filter((Rat x) => x <= pivot)(tail(xs));
+            List<Rat> right = filter((Rat x) => x > pivot)(tail(xs));
+            List<Rat> sorted_left = this.quicksort(left);
+            List<Rat> sorted_right = this.quicksort(right);
+            result = sorted_left;
+            result = appendright(result,pivot);
+            foreach (x in sorted_right) {
+                result = appendright(result, x);
+            }
+        }
+        return result;
+    }
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -57,7 +124,7 @@ interface PrometheusInterface {
     [Atomic] Unit register(List<Metric> ms);
     [Atomic] Unit unregister(List<Metric> ms);
     Rat getV(String metric, String key);
-    Rat maxV(String metric, String key);
+    Rat getP(String metric, String key, Int index);
 }
 
 class Prometheus() implements PrometheusInterface {
@@ -85,7 +152,6 @@ class Prometheus() implements PrometheusInterface {
                 tmp = without(tmp,m);
                 metrics = put(metrics,id,tmp);
             }
-            else metrics = put(metrics,id,list[m]);
         }
     }
 
@@ -93,19 +159,48 @@ class Prometheus() implements PrometheusInterface {
         List<Metric> ms = lookupDefault(metrics,Pair(metric,key),list[]);
         Rat toRet = 0;
         foreach (m in ms) {
-            Rat val = m.value();
-            toRet = toRet + val;
+                Rat val = 0;
+                try val = m.value(); catch _ => val = 0;
+                toRet = toRet + val;
         }
         return toRet;
     }
 
-    Rat maxV(String metric, String key) {
+   // NEW: Get P latency for a service
+    Rat getP(String metric, String key, Int index) {
         List<Metric> ms = lookupDefault(metrics,Pair(metric,key),list[]);
-        Rat toRet = 0;
+        List<Rat> vs = list[];
         foreach (m in ms) {
-            Rat val = m.value();
-            if (toRet < val) toRet = val;
+            Rat val = 0;
+            try val = m.p(index); catch _ => val = 0;            
+            if (val > 0) vs = appendright(vs, val);
         }
-        return toRet;
+        vs = this.quicksort(vs);
+        Int n = length(vs);
+        Int p_index = floor(float(n * index / 100));
+        Rat current_p = 0;
+        if (length(vs) == 0) current_p = 0;
+        else if (length(vs) == 1) current_p = nth(vs,0);
+        else current_p = nth(vs,p_index);
+        return current_p;
+    }
+
+    List<Rat> quicksort(List<Rat> xs) {
+        List<Rat> result = list[];
+        if (length(xs) <= 1) {
+            result = xs;
+        } else {
+            Rat pivot = nth(xs, 0);
+            List<Rat> left = filter((Rat x) => x <= pivot)(tail(xs));
+            List<Rat> right = filter((Rat x) => x > pivot)(tail(xs));
+            List<Rat> sorted_left = this.quicksort(left);
+            List<Rat> sorted_right = this.quicksort(right);
+            result = sorted_left;
+            result = appendright(result,pivot);
+            foreach (x in sorted_right) {
+                result = appendright(result, x);
+            }
+        }
+        return result;
     }
 }

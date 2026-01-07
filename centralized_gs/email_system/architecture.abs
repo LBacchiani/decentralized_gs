@@ -765,6 +765,5 @@ class MessageAnalyser(DBInterface db) implements MessageAnalyserInterface {
     Rat stop = timeValue(now());
     balancer!removeMessage();
     db!insertResult(id,stop - received_at);
-    
   }
 }

@@ -16,10 +16,9 @@ class Logger(PrometheusInterface prom) implements ILogger {
     
     Unit log(Rat time, Map<String,Rat> metrics, List<Int> config) {
         Float total = float(lookupDefault(metrics,"tot" + global_service_name(),0));
-        Float loss = float(lookupDefault(metrics,"rej" + global_service_name(),0));
         Float mcl = this.mcl(config);
         Int inst = this.sum(config);
-        Float completed = when lookupDefault(metrics,"comp" + global_service_name(),0) == 0 then -1.0 else float(lookupDefault(metrics,"comp" + global_service_name(),0));
+        Float completed = when lookupDefault(metrics,"comp" + global_service_name(),0) == 0 then 0.0 else float(lookupDefault(metrics,"comp" + global_service_name(),0));
         Float next = 0.0;
         Float mixed = 0.0;
         if (proactiveness()) {
@@ -30,10 +29,12 @@ class Logger(PrometheusInterface prom) implements ILogger {
         // if (mixing()) {
         //     mixed = float(target);
         // }
-        Float avgLat = when lookupDefault(metrics,"latency" + global_service_name(),0) == 0 then 0.0001 else float(lookupDefault(metrics,"latency" + global_service_name(),0)/rat(completed));
-        if (total == 0.0) {
-            avgLat = 0.0; 
-            completed = 0.0;
+
+        Float p50 = when lookupDefault(metrics,"p50",0) == 0 then 0.0001 else float(lookupDefault(metrics,"p50",0));
+        Float p99 = when lookupDefault(metrics,"p99",0) == 0 then 0.0001 else float(lookupDefault(metrics,"p99",0));
+        if (completed == 0.0) {
+            p50 = 0.0;
+            p99 = 0.0;
         }
         String proactive_log = when proactiveness() then " next: " + toString(next) else "";
         // String losses = "";
@@ -42,8 +43,7 @@ class Logger(PrometheusInterface prom) implements ILogger {
         //     Float tot = float(lookupDefault(metrics,"tot" + s,0));
         //     losses = losses + " " + s + " (tot: " + toString(tot) + " loss: " + toString(lossLocal) + ")";
         // }
-        println(toString(time * monitoring_window()) + " " + toString(avgLat * float(1000/time_unit_to_sec())) + proactive_log + " measured: " +  toString(float(rat(total)/monitoring_window())) + " tot: " + toString(total) + " comp: " + toString(completed) + " rej: " + toString(loss) + " supp: " + toString(mcl) + " inst: " + toString(inst) + " config: " + toString(config));
-
+        println("[GLOBAL_MONITOR] T=" + toString(time * monitoring_window()) + ",p50=" + toString(float(rat(p50)*1000/time_unit_to_sec())) + ",p99=" + toString(float(rat(p99)*1000/time_unit_to_sec())) + proactive_log + ",req/s=" +  toString(float(rat(total)/monitoring_window())) + ",req_tot=" + toString(total) + " comp=" + toString(completed) + ",supp=" + toString(mcl) + ",inst=" + toString(inst) + ",config=" + toString(config));
     }
 
     Int sum(List<Int> vs) {

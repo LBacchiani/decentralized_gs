@@ -37,6 +37,7 @@ class MessageReceiver_LoadBalancer(PrometheusInterface prometheus, DBInterface d
 
   MessageReceiverInterface disconnectInstance(){
     MessageReceiverInterface removedInstance = nth(instancesConnected, length(instancesConnected)-1);
+    //removedInstance!unregisterMetrics();
     instancesConnected = without(instancesConnected, removedInstance);
     return removedInstance;
   }
@@ -48,7 +49,8 @@ class MessageReceiver_LoadBalancer(PrometheusInterface prometheus, DBInterface d
       nextInstance = (nextInstance + 1) % length(instancesConnected);
       MessageReceiverInterface selectedInstance = nth(instancesConnected, nextInstance);
       pending = pending + 1;
-      selectedInstance!newRequest(mailData, this);
+      Rat queueTime = timeValue(now());
+      selectedInstance!newRequest(mailData, this, queueTime);
     } else {
       localLoss!push(1);
       loss!push(1);
@@ -60,21 +62,29 @@ class MessageReceiver_LoadBalancer(PrometheusInterface prometheus, DBInterface d
 }
 
 interface MessageReceiverInterface {
-    Unit newRequest(String mailData, MessageReceiver_LoadBalancerInterface balancer);
+    Unit newRequest(String mailData, MessageReceiver_LoadBalancerInterface balancer, Rat queueTime);
+    Unit unregisterMetrics();
 }
 
 class MessageReceiver(PrometheusInterface prometheus, MessageParser_LoadBalancerInterface parserLoadBalancer) implements MessageReceiverInterface {
   Int cores = 1;
   Metric completed;
+  Metric lat;
   {
     completed = new DiscreteMetric(Pair("comp", "MessageReceiver"));
-    prometheus!register(list[completed]);
+    lat = new LatencyMetric(Pair("latency", "MessageReceiver"));
+    prometheus!register(list[completed,lat]);
   }
 
-  Unit newRequest(String mailData, MessageReceiver_LoadBalancerInterface balancer) {
+  Unit unregisterMetrics() {
+    prometheus!unregister(list[completed,lat]);
+  }
+
+  Unit newRequest(String mailData, MessageReceiver_LoadBalancerInterface balancer, Rat queueTime) {
     [Cost: speed_per_core() * time_unit_to_sec() *  cores / nth(serviceMCLs(),0)] skip;
-    completed!push(1);
     Rat received_at = timeValue(now());
+    completed!push(1);
+    lat!push(received_at - queueTime);
     balancer!removeMessage();
     parserLoadBalancer!newRequest(mailData, received_at);
   }
@@ -110,6 +120,7 @@ class MessageParser_LoadBalancer(PrometheusInterface prometheus, DBInterface db)
 
   MessageParserInterface disconnectInstance(){
     MessageParserInterface removedInstance = nth(instancesConnected, length(instancesConnected) - 1);
+    //removedInstance!unregisterMetrics();
     instancesConnected = without(instancesConnected, removedInstance);
     return removedInstance;
   }
@@ -121,10 +132,10 @@ class MessageParser_LoadBalancer(PrometheusInterface prometheus, DBInterface db)
     total!push(1);
     if (pending < buffer_size()) {
       pending = pending + 1;
-      
       nextInstance = (nextInstance + 1) % length(instancesConnected);  
+      Rat queueTime = timeValue(now());
       MessageParserInterface selectedInstance = nth(instancesConnected, nextInstance);
-      selectedInstance!parseMessage(id, received_at, this);
+      selectedInstance!parseMessage(id, received_at, this, queueTime);
       id = id + 1;
     } else {
       loss!push(1);
@@ -138,20 +149,28 @@ class MessageParser_LoadBalancer(PrometheusInterface prometheus, DBInterface db)
 }
 
 interface MessageParserInterface {
-  Unit parseMessage (Int id, Rat received_at, MessageParser_LoadBalancerInterface balancer);
+  Unit parseMessage (Int id, Rat received_at, MessageParser_LoadBalancerInterface balancer, Rat queueTime);
+  Unit unregisterMetrics();
 }
 
 class MessageParser(PrometheusInterface prometheus, HeaderAnalyser_LoadBalancerInterface headerAnalyserLoadBalancer, LinkAnalyser_LoadBalancerInterface linkAnalyserLoadBalancer, TextAnalyser_LoadBalancerInterface textAnalyserLoadBalancer, VirusScanner_LoadBalancerInterface virusScannerLoadBalancer, MessageAnalyser_LoadBalancerInterface messageAnalyserLoadBalancer, DBInterface db) implements MessageParserInterface {
   Int cores = 1;
   Metric completed;
+  Metric lat;
   {
     completed = new DiscreteMetric(Pair("comp", "Parser"));
-    prometheus!register(list[completed]);
+    lat = new LatencyMetric(Pair("latency", "Parser"));
+    prometheus!register(list[completed,lat]);
   }
 
-  Unit parseMessage (Int id, Rat received_at, MessageParser_LoadBalancerInterface balancer){
+  Unit unregisterMetrics() {
+    prometheus!unregister(list[completed,lat]);
+  }
+
+  Unit parseMessage (Int id, Rat received_at, MessageParser_LoadBalancerInterface balancer, Rat queueTime){
     [Cost: speed_per_core() * time_unit_to_sec() *  cores / nth(serviceMCLs(),1)] skip;
     completed!push(1);
+    lat!push(timeValue(now()) - queueTime);
     balancer!removeMessage();
     Set<String> attachments = set[];
     Int n_attachments = random(5);
@@ -316,6 +335,7 @@ class SentimentAnalyser_LoadBalancer(PrometheusInterface prometheus, DBInterface
   SentimentAnalyserInterface disconnectInstance(){
     SentimentAnalyserInterface removedInstance = nth(instancesConnected, length(instancesConnected)-1);
     instancesConnected = without(instancesConnected, removedInstance);
+    //removedInstance!unregisterMetrics();
     return removedInstance;
   }
 
@@ -327,7 +347,8 @@ class SentimentAnalyser_LoadBalancer(PrometheusInterface prometheus, DBInterface
         
         nextInstance = (nextInstance + 1) % length(instancesConnected);
         SentimentAnalyserInterface selectedInstance = nth(instancesConnected, nextInstance);
-        Fut<String> fut = selectedInstance!analyzeSentiments(this);
+        Rat queueTime = timeValue(now());
+        Fut<String> fut = selectedInstance!analyzeSentiments(this,queueTime);
         res = Just(fut);
       } else {
         localLoss!push(1);
@@ -340,20 +361,29 @@ class SentimentAnalyser_LoadBalancer(PrometheusInterface prometheus, DBInterface
 }
 
 interface SentimentAnalyserInterface {
-  String analyzeSentiments(SentimentAnalyser_LoadBalancerInterface balancer);
+  String analyzeSentiments(SentimentAnalyser_LoadBalancerInterface balancer, Rat queueTime);
+  Unit unregisterMetrics();
 }
 
 class SentimentAnalyser(PrometheusInterface prometheus) implements SentimentAnalyserInterface {
   Int cores = 4;
   Metric completed;
+  Metric lat;
   {
     completed = new DiscreteMetric(Pair("comp", "SentimentAnalyser"));
-    prometheus!register(list[completed]);
+    lat = new LatencyMetric(Pair("latency", "SentimentAnalyser"));
+    prometheus!register(list[completed,lat]);
   }
-  String analyzeSentiments (SentimentAnalyser_LoadBalancerInterface balancer){
+
+  Unit unregisterMetrics() {
+    prometheus!unregister(list[completed,lat]);
+  }
+
+  String analyzeSentiments (SentimentAnalyser_LoadBalancerInterface balancer, Rat queueTime){
     //analyze message body and return the results
     [Cost: speed_per_core() * time_unit_to_sec() *  cores / nth(serviceMCLs(),5)] skip;
     completed!push(1);
+    lat!push(timeValue(now()) - queueTime);
     balancer!removeMessage();
     return "";
   }
@@ -384,6 +414,7 @@ class VirusScanner_LoadBalancer(PrometheusInterface prometheus, DBInterface db) 
 
   VirusScannerInterface disconnectInstance(){
     VirusScannerInterface removedInstance = nth(instancesConnected,length(instancesConnected) - 1);
+    //removedInstance!unregisterMetrics();
     instancesConnected = without(instancesConnected, removedInstance);
     return removedInstance;
   }
@@ -395,7 +426,8 @@ class VirusScanner_LoadBalancer(PrometheusInterface prometheus, DBInterface db) 
       
       nextInstance = (nextInstance + 1) % length(instancesConnected);  
       VirusScannerInterface selectedInstance = nth(instancesConnected, nextInstance);
-      selectedInstance!scanAttachment(messageId,received_at,this);
+      Rat queueTime = timeValue(now());
+      selectedInstance!scanAttachment(messageId,received_at,this,queueTime);
     } else {
       db!removeMessage(messageId);
       localLoss!push(1);
@@ -410,20 +442,28 @@ class VirusScanner_LoadBalancer(PrometheusInterface prometheus, DBInterface db) 
 }
 
 interface VirusScannerInterface {
-  Unit scanAttachment(String messageId, Rat received_at, VirusScanner_LoadBalancerInterface balancer);
+  Unit scanAttachment(String messageId, Rat received_at, VirusScanner_LoadBalancerInterface balancer, Rat queueTime);
+  Unit unregisterMetrics();
 }
 
 class VirusScanner(PrometheusInterface prometheus, AttachmentsManager_LoadBalancerInterface attachmentsManagerLoadBalancer, MessageAnalyser_LoadBalancerInterface messageAnalyserLoadBalancer) implements VirusScannerInterface {
   Int cores = 4;
   Metric completed;
+  Metric lat;
   {
     completed = new DiscreteMetric(Pair("comp", "VirusScanner"));
-    prometheus!register(list[completed]);
+    lat = new LatencyMetric(Pair("latency", "VirusScanner"));
+    prometheus!register(list[completed,lat]);
   }
 
-  Unit scanAttachment(String messageId, Rat received_at, VirusScanner_LoadBalancerInterface balancer) {
+  Unit unregisterMetrics() {
+    prometheus!unregister(list[completed,lat]);
+  }
+
+  Unit scanAttachment(String messageId, Rat received_at, VirusScanner_LoadBalancerInterface balancer, Rat queueTime) {
     [Cost: speed_per_core() * time_unit_to_sec() * cores / nth(serviceMCLs(),6)] skip;
     completed!push(1);
+    lat!push(timeValue(now()) - queueTime);
     balancer!removeMessage();
     Bool virusFound = random(4) == 0;
     if (virusFound) { 
@@ -460,6 +500,7 @@ class AttachmentsManager_LoadBalancer(PrometheusInterface prometheus, DBInterfac
 
   AttachmentsManagerInterface disconnectInstance(){
     AttachmentsManagerInterface removedInstance = nth(instancesConnected,length(instancesConnected) - 1);
+    //removedInstance!unregisterMetrics();
     instancesConnected = without(instancesConnected, removedInstance);
     return removedInstance;
   }
@@ -470,8 +511,9 @@ class AttachmentsManager_LoadBalancer(PrometheusInterface prometheus, DBInterfac
       
       pending = pending + 1;
       nextInstance = (nextInstance + 1) % length(instancesConnected);  
-      AttachmentsManagerInterface selectedInstance = nth(instancesConnected, nextInstance);      
-      selectedInstance!manageAttachments(messageId,received_at,this);
+      AttachmentsManagerInterface selectedInstance = nth(instancesConnected, nextInstance);   
+      Rat queueTime = timeValue(now());   
+      selectedInstance!manageAttachments(messageId,received_at,this,queueTime);
     } else {
       db!removeMessage(messageId);
       localLoss!push(1);
@@ -486,20 +528,27 @@ class AttachmentsManager_LoadBalancer(PrometheusInterface prometheus, DBInterfac
 }
 
 interface AttachmentsManagerInterface {
-  Unit manageAttachments(String messageId, Rat received_at, AttachmentsManager_LoadBalancerInterface balancer);
+  Unit manageAttachments(String messageId, Rat received_at, AttachmentsManager_LoadBalancerInterface balancer, Rat queueTime);
+  Unit unregisterMetrics();
 }
 
 class AttachmentsManager(PrometheusInterface prometheus, ImageAnalyser_LoadBalancerInterface imageAnalyserLoadBalancer) implements AttachmentsManagerInterface {
   Int cores = 1;
   Metric completed;
+  Metric lat;
   {
     completed = new DiscreteMetric(Pair("comp", "AttachmentsManager"));
-    prometheus!register(list[completed]);
+    lat = new LatencyMetric(Pair("latency", "AttachmentsManager"));
+    prometheus!register(list[completed,lat]);
+  }
+  Unit unregisterMetrics() {
+    prometheus!register(list[completed,lat]);
   }
 
-  Unit manageAttachments(String messageId, Rat received_at, AttachmentsManager_LoadBalancerInterface balancer){
+  Unit manageAttachments(String messageId, Rat received_at, AttachmentsManager_LoadBalancerInterface balancer, Rat queueTime){
     [Cost: speed_per_core() * time_unit_to_sec() * cores / nth(serviceMCLs(),7)] skip;
     completed!push(1);
+    lat!push(timeValue(now()) - queueTime);
     balancer!removeMessage();
     imageAnalyserLoadBalancer!newRequest(messageId, received_at);
   }
@@ -530,6 +579,7 @@ class ImageAnalyser_LoadBalancer(PrometheusInterface prometheus, DBInterface db)
 
   ImageAnalyserInterface disconnectInstance(){
     ImageAnalyserInterface removedInstance = nth(instancesConnected,length(instancesConnected) - 1);
+    //removedInstance!unregisterMetrics();
     instancesConnected = without(instancesConnected, removedInstance);
     return removedInstance;
   }
@@ -544,8 +594,9 @@ class ImageAnalyser_LoadBalancer(PrometheusInterface prometheus, DBInterface db)
       pending = pending + 1;
       
       nextInstance = (nextInstance + 1) % length(instancesConnected);  
-      ImageAnalyserInterface selectedInstance = nth(instancesConnected, nextInstance);      
-      selectedInstance!analyzeImage(messageId, received_at, this);
+      ImageAnalyserInterface selectedInstance = nth(instancesConnected, nextInstance); 
+      Rat queueTime = timeValue(now());     
+      selectedInstance!analyzeImage(messageId, received_at, this, queueTime);
     } else {
       db!removeMessage(messageId);
       localLoss!push(1);
@@ -559,20 +610,28 @@ class ImageAnalyser_LoadBalancer(PrometheusInterface prometheus, DBInterface db)
 }
 
 interface ImageAnalyserInterface {
-  Unit analyzeImage(String messageId, Rat received_at, ImageAnalyser_LoadBalancerInterface balancer);
+  Unit analyzeImage(String messageId, Rat received_at, ImageAnalyser_LoadBalancerInterface balancer, Rat queueTime);
+  Unit unregisterMetrics();
 }
 
 class ImageAnalyser(PrometheusInterface prometheus, NSFWDetector_LoadBalancerInterface nsfwDetectorLoadBalancer, ImageRecognizer_LoadBalancerInterface imageRecognizerLoadBalancer, MessageAnalyser_LoadBalancerInterface messageAnalyserLoadBalancer) implements ImageAnalyserInterface {
   Int cores = 1;
   Metric completed;
+  Metric lat;
   {
     completed = new DiscreteMetric(Pair("comp", "ImageAnalyser"));
-    prometheus!register(list[completed]);
+    lat = new LatencyMetric(Pair("latency", "ImageAnalyser"));
+    prometheus!register(list[completed,lat]);
   }
 
-  Unit analyzeImage (String messageId, Rat received_at, ImageAnalyser_LoadBalancerInterface balancer){
+  Unit unregisterMetrics() {
+    prometheus!unregister(list[completed,lat]);
+  }
+
+  Unit analyzeImage (String messageId, Rat received_at, ImageAnalyser_LoadBalancerInterface balancer, Rat queueTime){
     [Cost: speed_per_core() * time_unit_to_sec() * cores / nth(serviceMCLs(),8)] skip;
     completed!push(1);
+    lat!push(timeValue(now()) - queueTime);
     balancer!removeMessage();
     Maybe<Fut<Bool>> maybeNSFW = nsfwDetectorLoadBalancer.newRequest(messageId);
     Maybe<Fut<String>> maybeImageCategory = imageRecognizerLoadBalancer.newRequest(messageId);
@@ -609,6 +668,7 @@ class NSFWDetector_LoadBalancer(PrometheusInterface prometheus, DBInterface db) 
 
   NSFWDetectorInterface disconnectInstance(){
     NSFWDetectorInterface removedInstance = nth(instancesConnected, length(instancesConnected)-1);
+    //removedInstance!unregisterMetrics();
     instancesConnected = without(instancesConnected, removedInstance);
     return removedInstance;
   }
@@ -618,10 +678,10 @@ class NSFWDetector_LoadBalancer(PrometheusInterface prometheus, DBInterface db) 
     total!push(1);
     if(pending < buffer_size()) {
       pending = pending + 1;
-      
       nextInstance = (nextInstance + 1) % length(instancesConnected);
       NSFWDetectorInterface selectedInstance = nth(instancesConnected, nextInstance);
-      Fut<Bool> fut = selectedInstance!nsfwDetection(this);
+      Rat queueTime = timeValue(now());
+      Fut<Bool> fut = selectedInstance!nsfwDetection(this, queueTime);
       res = Just(fut);
     } else {
       localLoss!push(1);
@@ -634,21 +694,29 @@ class NSFWDetector_LoadBalancer(PrometheusInterface prometheus, DBInterface db) 
 }
 
 interface NSFWDetectorInterface {
-  Bool nsfwDetection(NSFWDetector_LoadBalancerInterface balancer);
+  Bool nsfwDetection(NSFWDetector_LoadBalancerInterface balancer, Rat queueTime);
+  Unit unregisterMetrics();
 }
 
 class NSFWDetector(PrometheusInterface prometheus) implements NSFWDetectorInterface {
   Int yesOrNot = -1;
   Int cores = 6;
   Metric completed;
+  Metric lat;
   {
     completed = new DiscreteMetric(Pair("comp", "NSFWDetector"));
-    prometheus!register(list[completed]);
+    lat = new LatencyMetric(Pair("latency", "NSFWDetector"));
+    prometheus!register(list[completed,lat]);
   }
 
-  Bool nsfwDetection(NSFWDetector_LoadBalancerInterface balancer){
+  Unit unregisterMetrics() {
+    prometheus!unregister(list[completed,lat]);
+  }
+
+  Bool nsfwDetection(NSFWDetector_LoadBalancerInterface balancer, Rat queueTime){
 		[Cost: speed_per_core() * time_unit_to_sec() * cores / nth(serviceMCLs(),9)] skip;
     completed!push(1);
+    lat!push(timeValue(now()) - queueTime);
     balancer!removeMessage();
     yesOrNot = yesOrNot + 1;
     return yesOrNot%3 == 0;
@@ -679,6 +747,7 @@ class ImageRecognizer_LoadBalancer(PrometheusInterface prometheus, DBInterface d
 
   ImageRecognizerInterface disconnectInstance(){
     ImageRecognizerInterface removedInstance = nth(instancesConnected, length(instancesConnected)-1);
+    //removedInstance!unregisterMetrics();
     instancesConnected = without(instancesConnected, removedInstance);
     return removedInstance;
   }
@@ -688,10 +757,10 @@ class ImageRecognizer_LoadBalancer(PrometheusInterface prometheus, DBInterface d
     total!push(1);
     if(pending < buffer_size()) {
       pending = pending + 1;
-      
       nextInstance = (nextInstance + 1) % length(instancesConnected);
       ImageRecognizerInterface selectedInstance = nth(instancesConnected, nextInstance);
-      Fut<String> fut = selectedInstance!recognizeImage(this);
+      Rat queueTime = timeValue(now());
+      Fut<String> fut = selectedInstance!recognizeImage(this, queueTime);
       res = Just(fut);
     } else {
       localLoss!push(1);
@@ -704,19 +773,28 @@ class ImageRecognizer_LoadBalancer(PrometheusInterface prometheus, DBInterface d
 }
 
 interface ImageRecognizerInterface {
-  String recognizeImage(ImageRecognizer_LoadBalancerInterface balancer);
+  String recognizeImage(ImageRecognizer_LoadBalancerInterface balancer, Rat queueTime);
+  Unit unregisterMetrics();
 }
 
 class ImageRecognizer(PrometheusInterface prometheus) implements ImageRecognizerInterface {
   Int cores = 6;
   Metric completed;
+  Metric lat;
   {
     completed = new DiscreteMetric(Pair("comp", "ImageRecognizer"));
-    prometheus!register(list[completed]);
+    lat = new LatencyMetric(Pair("latency", "ImageRecognizer"));
+    prometheus!register(list[completed,lat]);
   }
-  String recognizeImage(ImageRecognizer_LoadBalancerInterface balancer){
+
+  Unit unregisterMetrics() {
+    prometheus!unregister(list[completed,lat]);
+  }
+
+  String recognizeImage(ImageRecognizer_LoadBalancerInterface balancer, Rat queueTime){
 		[Cost: speed_per_core() * time_unit_to_sec() * cores / nth(serviceMCLs(),10)] skip;
     completed!push(1);
+    lat!push(timeValue(now()) - queueTime);
     balancer!removeMessage();
     return "";
   }
@@ -748,6 +826,7 @@ class MessageAnalyser_LoadBalancer(PrometheusInterface prometheus,DBInterface db
 
   MessageAnalyserInterface disconnectInstance(){
     MessageAnalyserInterface removedInstance = nth(instancesConnected,length(instancesConnected) - 1);
+    //removedInstance!unregisterMetrics();
     instancesConnected = without(instancesConnected, removedInstance);
     return removedInstance;
   }
@@ -763,37 +842,43 @@ class MessageAnalyser_LoadBalancer(PrometheusInterface prometheus,DBInterface db
       
       nextInstance = (nextInstance + 1) % length(instancesConnected);  
       MessageAnalyserInterface selectedInstance = nth(instancesConnected, nextInstance);
-      selectedInstance!insertResult(id,received_at,this);
+      Rat queueTime = timeValue(now());
+      selectedInstance!insertResult(id, received_at, this, queueTime);
     } else {
       localLoss!push(1);
       db!removeMessage(id);
     }
 	}
 
-  Unit removeMessage () {
-    pending = pending - 1;
-  }
+  Unit removeMessage () { pending = pending - 1; }
 
 }
 
 interface MessageAnalyserInterface {
-    Unit insertResult(String id, Rat received_at, MessageAnalyser_LoadBalancerInterface balancer);
+    Unit insertResult(String id, Rat received_at, MessageAnalyser_LoadBalancerInterface balancer, Rat queueTime);
+    Unit unregisterMetrics();
 }
 
 class MessageAnalyser(PrometheusInterface prometheus, DBInterface db) implements MessageAnalyserInterface {
   Int cores = 1;
   Metric completed;
+  Metric lat;
   {
     completed = new DiscreteMetric(Pair("comp", "MessageAnalyser"));
-    prometheus!register(list[completed]);
+    lat = new LatencyMetric(Pair("latency", "MessageAnalyser"));
+    prometheus!register(list[completed,lat]);
   }
 
-  Unit insertResult(String id,Rat received_at, MessageAnalyser_LoadBalancerInterface balancer){
+  Unit unregisterMetrics() {
+    prometheus!unregister(list[completed,lat]);
+  }
+
+  Unit insertResult(String id,Rat received_at, MessageAnalyser_LoadBalancerInterface balancer, Rat queueTime){
     [Cost: speed_per_core() * time_unit_to_sec() * cores / nth(serviceMCLs(),11)] skip;
     completed!push(1);
+    lat!push(timeValue(now()) - queueTime);
     Rat stop = timeValue(now());
     balancer!removeMessage();
     db!insertResult(id,stop - received_at);
-    
   }
 }

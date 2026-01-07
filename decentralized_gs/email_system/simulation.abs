@@ -107,11 +107,17 @@ class Simulation() implements ISimulation {
           maLB.connectInstance(ma);
         
           Int i = 0;
+          DecentralizedScalerInterface leader;
           while (i < length(services())) {
-               new DecentralizedScaler(0, Leader, i, nth(base_config(),i), cp, prometheus, mrLB, mpLB, haLB, laLB, taLB, saLB, vsLB, amLB, iaLB, nsfwLB, irLB, maLB, db, list[]);
+               Int j = 0;
+               List<DecentralizedScalerInterface> peers = list[];
+               while (j < high_availability()) {
+                    DecentralizedScalerInterface tmp = new DecentralizedScaler(j, Follower, i, nth(base_config(),i), cp, prometheus, mrLB, mpLB, haLB, laLB, taLB, saLB, vsLB, amLB, iaLB, nsfwLB, irLB, maLB, db, peers);
+                    peers = appendright(peers, tmp);
+                    j = j + 1;
+               }
                i = i + 1;
           }
-
           
           new Monitor(prometheus);
           new WorkloadGenerator(mrLB);

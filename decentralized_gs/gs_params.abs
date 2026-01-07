@@ -6,8 +6,8 @@ import * from Param;
 
 
 
-def List<String> service_metrics() = list["tot", "rej", "inst"];
-def List<String> global_metrics() = list["tot", "comp", "latency", "supp", "inst", "rej"];
+def List<String> service_metrics() = list["tot", "inst", "latency"];
+def List<String> global_metrics() = list["tot", "comp", "latency", "supp", "inst"];
 
 
 def Int weightedChoice(Int n) =

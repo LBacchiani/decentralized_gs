@@ -34,8 +34,15 @@ class Monitor(PrometheusInterface prom) {
                 }
             }
             foreach (m in global_metrics()) {
-                Rat val = await prom!getV(m, global_service_name());
-                metrics = put(metrics, m + global_service_name(), val);
+                if (m == "latency") {
+                    Rat p50 = await prom!getP(m, global_service_name(), 50);
+                    Rat p99 = await prom!getP(m, global_service_name(), 99);
+                    metrics = put(metrics, "p50", p50);
+                    metrics = put(metrics, "p99", p99);
+                } else {
+                    Rat val = await prom!getV(m, global_service_name());
+                    metrics = put(metrics, m + global_service_name(), val);                
+                }
             }
             logger!log(time, metrics, config);
         }
