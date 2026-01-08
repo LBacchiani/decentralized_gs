@@ -43,7 +43,7 @@ class Logger(PrometheusInterface prom) implements ILogger {
         //     Float tot = float(lookupDefault(metrics,"tot" + s,0));
         //     losses = losses + " " + s + " (tot: " + toString(tot) + " loss: " + toString(lossLocal) + ")";
         // }
-        println("[GLOBAL_MONITOR] T=" + toString(time * monitoring_window()) + ",p50=" + toString(float(rat(p50)*1000/time_unit_to_sec())) + ",p99=" + toString(float(rat(p99)*1000/time_unit_to_sec())) + proactive_log + ",req/s=" +  toString(float(rat(total)/monitoring_window())) + ",req_tot=" + toString(total) + " comp=" + toString(completed) + ",supp=" + toString(mcl) + ",inst=" + toString(inst) + ",config=" + toString(config));
+        println("[GLOBAL_MONITOR] T=" + toString(time * monitoring_window()) + ",p50=" + toString(float(rat(p50)*1000/time_unit_to_sec())) + ",p99=" + toString(float(rat(p99)*1000/time_unit_to_sec())) + proactive_log + ",req/s=" +  toString(float(rat(total)/monitoring_window())) + ",req_tot=" + toString(total) + ",comp=" + toString(completed) + ",supp=" + toString(mcl) + ",inst=" + toString(inst) + ",config=" + toString(config));
     }
 
     Int sum(List<Int> vs) {

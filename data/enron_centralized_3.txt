@@ -1,0 +1,1 @@
+[GLOBAL_MONITOR] T=0,p50=0.0,p99=0.0,req/s=0.0,req_tot=0.0,comp=0.0,supp=60.0,inst=13,config=list[1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1]

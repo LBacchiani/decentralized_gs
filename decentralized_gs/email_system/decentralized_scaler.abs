@@ -794,7 +794,7 @@ class DecentralizedScaler(
             // Mature: use left-trimmed mean (remove bottom 10%)
             List<Rat> sorted = this.quicksort(capacity_history);
             Int n = length(sorted);
-            Int trim_count = floor(float(n * 10 / 100));
+            Int trim_count = floor(float(n * 25 / 100));
             
             // Keep top 75% of observations
             List<Rat> upper_observations = list[];
@@ -875,7 +875,7 @@ class DecentralizedScaler(
                 // Mature: use bilateral trimmed mean (remove 10% from each end)
                 List<Rat> sorted = this.quicksort(fanout_history);
                 Int n = length(sorted);
-                Int trim_count = floor(float(n * 10 / 100));
+                Int trim_count = floor(float(n * 25 / 100));
                 
                 // Keep middle 50% of observations
                 List<Rat> middle_observations = list[];
