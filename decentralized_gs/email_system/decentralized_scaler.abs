@@ -616,7 +616,7 @@ class DecentralizedScaler(
     //////////////////// Capacity Learning (MCL) ////////////////////
     Rat capacity = 0;  // Per-replica throughput capacity (req/s)
     List<Rat> capacity_history = list[];
-    Int capacity_history_size = 50;
+    Int capacity_history_size = 20;
     Int capacity_samples = 0;
     Bool capacity_learnable = True;  // Can we learn in current overload episode?
     Int stable_overload_windows = 0;  // Consecutive windows with p99 > SLA
@@ -624,7 +624,7 @@ class DecentralizedScaler(
     //////////////////// Fanout Learning (MF) ////////////////////
     Rat fanout = 0;  // Requests to this service per ingress request
     List<Rat> fanout_history = list[];
-    Int fanout_history_size = 50;
+    Int fanout_history_size = 20;
     Int fanout_samples = 0;
     Int stable_windows_no_overload = 2;  // Start assuming stable (no overload)
     
@@ -791,10 +791,10 @@ class DecentralizedScaler(
             Rat sum = foldl((Rat x, Rat a) => x + a)(capacity_history, 0);
             capacity = sum / length(capacity_history);
         } else {
-            // Mature: use left-trimmed mean (remove bottom 25%)
+            // Mature: use left-trimmed mean (remove bottom 10%)
             List<Rat> sorted = this.quicksort(capacity_history);
             Int n = length(sorted);
-            Int trim_count = floor(float(n * 25 / 100));
+            Int trim_count = floor(float(n * 10 / 100));
             
             // Keep top 75% of observations
             List<Rat> upper_observations = list[];
@@ -872,10 +872,10 @@ class DecentralizedScaler(
                 Rat sum = foldl((Rat x, Rat a) => x + a)(fanout_history, 0);
                 fanout = sum / length(fanout_history);
             } else {
-                // Mature: use bilateral trimmed mean (remove 25% from each end)
+                // Mature: use bilateral trimmed mean (remove 10% from each end)
                 List<Rat> sorted = this.quicksort(fanout_history);
                 Int n = length(sorted);
-                Int trim_count = floor(float(n * 25 / 100));
+                Int trim_count = floor(float(n * 10 / 100));
                 
                 // Keep middle 50% of observations
                 List<Rat> middle_observations = list[];

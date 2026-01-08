@@ -32,8 +32,8 @@ def Rat speed_per_core() = 5;
 def Rat heartbeat_timeout() = 50 * time_unit_to_sec() / 1000;
 def Rat election_timeout() = (150 + random(150)) * time_unit_to_sec() / 1000;
 def Int high_availability() = 1;
-def Rat local_sla() = 500 / 1000; //ms
-def Rat global_sla() = 500 / 1000; //ms
+def Rat local_sla() = 50 / 1000; //ms
+def Rat global_sla() = 100 / 1000; //ms
 
 
 
