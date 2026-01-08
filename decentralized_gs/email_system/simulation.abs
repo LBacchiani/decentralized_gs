@@ -112,7 +112,7 @@ class Simulation() implements ISimulation {
                Int j = 0;
                List<DecentralizedScalerInterface> peers = list[];
                while (j < high_availability()) {
-                    DecentralizedScalerInterface tmp = new DecentralizedScaler(j, Follower, i, nth(base_config(),i), cp, prometheus, mrLB, mpLB, haLB, laLB, taLB, saLB, vsLB, amLB, iaLB, nsfwLB, irLB, maLB, db, peers);
+                    DecentralizedScalerInterface tmp = new DecentralizedScaler(j, Leader, i, nth(base_config(),i), cp, prometheus, mrLB, mpLB, haLB, laLB, taLB, saLB, vsLB, amLB, iaLB, nsfwLB, irLB, maLB, db, peers);
                     peers = appendright(peers, tmp);
                     j = j + 1;
                }
