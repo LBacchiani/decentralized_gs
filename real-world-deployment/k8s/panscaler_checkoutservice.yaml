@@ -21,6 +21,8 @@ spec:
           image: lorenzobacchiani/panscaler:latest
           imagePullPolicy: Always
           env:
+            - name: ENTRYPOINT
+              value: "frontend"
             - name: SERVICE_NAME
               value: "checkoutservice"
             - name: PROMETHEUS_URL
@@ -32,7 +34,7 @@ spec:
             - name: THROUGHPUT_EPSILON
               value: "0.02"
             - name: LATENCY_THRESHOLD_MS
-              value: "700"
+              value: "1500"
             - name: OVERLOAD_WINDOWS
               value: "5"
           resources:

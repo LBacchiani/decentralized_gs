@@ -122,7 +122,7 @@ class ServiceScaler:
             )
         """
 
-        retried_requests = f"""
+        retried_requests_query = f"""
         sum(
             rate(istio_requests_total{{
                 source_workload="{self.service_name}",
@@ -132,14 +132,35 @@ class ServiceScaler:
         )
         """
 
-
+        std_dev_query = f"""
+        stddev_over_time(
+            sum(rate(istio_requests_total{{
+                destination_workload="{self.service_name}",
+                reporter="source"
+            }}[{self.poll_interval}s]))[3m:]
+        )
+        """
+    
+        e2e_latency_query = f"""
+        histogram_quantile(
+            0.95,
+            sum(
+                rate(istio_request_duration_milliseconds_bucket{{
+                destination_workload="{self.entrypoint}",
+                reporter="source"
+                }}[{self.poll_interval}s])
+            ) by (le)
+        )
+        """
 
         local_inbound_rps = self.query_prometheus(inbound_query)
         entrypoint_rps = self.query_prometheus(inbound_entrypoint_query)
         total_latency_s = self.query_prometheus(total_latency_query) / 1000.0
         downstream_latency_s = self.query_prometheus(downstream_latency_query) / 1000.0
+        e2e_latency = self.query_prometheus(e2e_latency_query) / 1000.0
         successful_requests = self.query_prometheus(successful_requests_query)
-        retried_requests = self.query_prometheus(retried_requests)
+        retried_requests = self.query_prometheus(retried_requests_query)
+        std_dev = self.query_prometheus(std_dev_query)
         cpu_usage = self.query_prometheus(cpu_usage_query)
         cpu_limit = self.query_prometheus(cpu_limit_query)
         mem_usage = self.query_prometheus(mem_usage_query)
@@ -153,9 +174,15 @@ class ServiceScaler:
 
         # Local tail latency = total - downstream
         local_latency_s = max(total_latency_s - downstream_latency_s, 0.0)
-        successful_rate = successful_requests / local_inbound_rps
-        retried_rate = retried_requests / local_inbound_rps
-        return local_inbound_rps, entrypoint_rps, local_latency_s, downstream_latency_s, successful_rate, retried_rate cpu_p if cpu_p > 0 else None, mem_p if mem_p > 0  else None
+        if local_inbound_rps > 0:
+            successful_rate = successful_requests / local_inbound_rps
+            retried_rate = retried_requests / local_inbound_rps
+            std_dev_workload = std_dev / local_inbound_rps
+        else:
+            successful_rate = 1.0
+            retried_rate = 0.0
+            std_dev_workload = 0.0
+        return local_inbound_rps, entrypoint_rps, e2e_latency, local_latency_s, downstream_latency_s, successful_rate, retried_rate, std_dev_workload, cpu_p if cpu_p > 0 else None, mem_p if mem_p > 0  else None
 
     def run_loop(self):
         min_instances = self.get_current_replicas()
@@ -163,16 +190,24 @@ class ServiceScaler:
         capacity = None
         update_inst = False
         while True:
-            local_inbound_rps, local_latency_s, downstream_latency_s, cpu_p, mem_p = self.get_metrics()
+            local_inbound_rps, entrypoint_rps, e2e_latency, local_latency_s, downstream_latency_s, \
+            successful_rate, retried_rate, std_dev_workload, cpu_p, mem_p = self.get_metrics()
+
             print(
-                f"[{self.service_name}] REQ/s={local_inbound_rps:.2f}, "
-                f"LocalLatency={local_latency_s:.2f}s, "
-                f"DownstreamLatency={downstream_latency_s:.2f}s, "
-                f"{f'capacity={capacity: .2f} ' if capacity else f'capacity=not available, '}"
-                f"{f'CPU={cpu_p:.2f}%, ' if cpu_p else 'CPU=not available, '}"
-                f"{f'MEM={mem_p:.2f}%, ' if mem_p else 'MEM=not available, '}"
-                f"{f'INST={instances} '}"
-                f"{f'MIN INST={min_instances}'}"
+                f"[{self.service_name}] "
+                f"RPS_local={local_inbound_rps:.2f}, "
+                f"RPS_entry={entrypoint_rps:.2f}, "
+                f"E2E_p95={e2e_latency:.2f}s, "
+                f"Local_p95={local_latency_s:.2f}s, "
+                f"Downstream_p95={downstream_latency_s:.2f}s, "
+                f"SuccRate={successful_rate:.3f}, "
+                f"RetryRate={retried_rate:.3f}, "
+                f"WorkloadStd={std_dev_workload:.3f}, "
+                f"{f'Cap={capacity:.2f}, ' if capacity else 'Cap=N/A, '}"
+                f"{f'CPU={cpu_p:.2f}, ' if cpu_p is not None else 'CPU=N/A, '}"
+                f"{f'MEM={mem_p:.2f}, ' if mem_p is not None else 'MEM=N/A, '}"
+                f"INST={instances}, "
+                f"MIN_INST={min_instances}"
             )
 
             self.cooldown = max(0,self.cooldown - 1)
@@ -182,7 +217,7 @@ class ServiceScaler:
                 capacity = self.learner.get_capacity()
                 saturated = local_latency_s > self.slo_s
                 if capacity is not None and capacity > 0:
-                    desired_replicas = max(min_instances, math.ceil(req_rate / capacity))
+                    desired_replicas = max(min_instances, math.ceil(local_inbound_rps / capacity))
                     scale_condition = (desired_replicas > instances and saturated) or (desired_replicas < instances and not saturated)
                     if scale_condition:
                         print(f"[{self.service_name}] Scaling {instances} -> {desired_replicas} replicas")

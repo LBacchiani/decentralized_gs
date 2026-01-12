@@ -21,6 +21,8 @@ spec:
           image: lorenzobacchiani/panscaler:latest
           imagePullPolicy: Always
           env:
+            - name: ENTRYPOINT
+              value: "frontend"
             - name: SERVICE_NAME
               value: "emailservice"
             - name: PROMETHEUS_URL
