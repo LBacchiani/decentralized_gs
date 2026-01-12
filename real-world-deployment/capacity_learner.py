@@ -3,9 +3,8 @@ from collections import deque
 import os
 
 class ServiceCapacityLearner:
-    def __init__(self, service_name, slo_s, poll_interval):
+    def __init__(self, service_name, slo_s):
         self.service = service_name
-        self.poll_interval = poll_interval
 
         # parameters
         self.slo_s = slo_s

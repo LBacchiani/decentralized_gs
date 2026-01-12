@@ -29,8 +29,8 @@ class ServiceScaler:
 
         # Initialize state
         self.slo_s = float(os.getenv("LATENCY_THRESHOLD_MS", 500)) / 1000
-        self.capacity_learner = ServiceCapacityLearner(self.service_name, self.slo_s, self.poll_interval)
-        self.fanout_learner = ServiceFanoutLearner(self.service_name, self.slo_s, self.poll_interval)
+        self.capacity_learner = ServiceCapacityLearner(self.service_name, self.slo_s)
+        self.fanout_learner = ServiceFanoutLearner(self.service_name)
 
         # Kubernetes client
         config.load_incluster_config()
@@ -143,23 +143,23 @@ class ServiceScaler:
         )
         """
     
-        e2e_latency_query = f"""
-        histogram_quantile(
-            0.95,
-            sum(
-                rate(istio_request_duration_milliseconds_bucket{{
-                destination_workload="{self.entrypoint}",
-                reporter="source"
-                }}[{self.poll_interval}s])
-            ) by (le)
-        )
-        """
+        # e2e_latency_s_query = f"""
+        # histogram_quantile(
+        #     0.95,
+        #     sum(
+        #         rate(istio_request_duration_milliseconds_bucket{{
+        #         destination_workload="{self.entrypoint}",
+        #         reporter="source"
+        #         }}[{self.poll_interval}s])
+        #     ) by (le)
+        # )
+        # """
 
         local_inbound_rps = self.query_prometheus(inbound_query)
         entrypoint_rps = self.query_prometheus(inbound_entrypoint_query)
         total_latency_s = self.query_prometheus(total_latency_query) / 1000.0
         downstream_latency_s = self.query_prometheus(downstream_latency_query) / 1000.0
-        e2e_latency = self.query_prometheus(e2e_latency_query) / 1000.0
+        # e2e_latency_s = self.query_prometheus(e2e_latency_s_query) / 1000.0
         successful_requests = self.query_prometheus(successful_requests_query)
         retried_requests = self.query_prometheus(retried_requests_query)
         std_dev = self.query_prometheus(std_dev_query)
@@ -184,7 +184,9 @@ class ServiceScaler:
             successful_rate = 1.0
             retry_rate = 0.0
             std_dev_workload = 0.0
-        return local_inbound_rps, entrypoint_rps, e2e_latency, local_latency_s, downstream_latency_s, successful_rate, retry_rate, std_dev_workload, cpu_p if cpu_p > 0 else None, mem_p if mem_p > 0  else None
+        # return local_inbound_rps, entrypoint_rps, e2e_latency_s, local_latency_s, downstream_latency_s, successful_rate, retry_rate, std_dev_workload, cpu_p if cpu_p > 0 else None, mem_p if mem_p > 0  else None
+
+        return local_inbound_rps, entrypoint_rps, local_latency_s, downstream_latency_s, successful_rate, retry_rate, std_dev_workload, cpu_p if cpu_p > 0 else None, mem_p if mem_p > 0  else None
 
     def run_loop(self):
         min_instances = self.get_current_replicas()
@@ -193,20 +195,21 @@ class ServiceScaler:
         fanout = None
         update_inst = False
         while True:
-            local_inbound_rps, entrypoint_rps, e2e_latency, local_latency_s, downstream_latency_s, \
+            # local_inbound_rps, entrypoint_rps, e2e_latency_s, local_latency_s, downstream_latency_s, \
+            local_inbound_rps, entrypoint_rps, local_latency_s, downstream_latency_s, \
             successful_rate, retry_rate, std_dev_workload, cpu_p, mem_p = self.get_metrics()
             print(
                 f"[{self.service_name}] "
                 f"RPS_local={local_inbound_rps:.2f}, "
                 f"RPS_entry={entrypoint_rps:.2f}, "
-                f"E2E_p95={e2e_latency:.2f}s, "
+                # f"E2E_p95={e2e_latency_s:.2f}s, "
                 f"Local_p95={local_latency_s:.2f}s, "
                 f"Downstream_p95={downstream_latency_s:.2f}s, "
                 f"SuccRate={successful_rate:.3f}, "
                 f"RetryRate={retry_rate:.3f}, "
                 f"WorkloadStd={std_dev_workload:.3f}, "
                 f"{f'Cap={capacity:.2f}, ' if capacity else 'Cap=N/A, '}"
-                f"{f'FOutut={fanout:.2f}, ' if fanout else 'FOut=N/A, '}"
+                f"{f'FOut={fanout:.2f}, ' if fanout else 'FOut=N/A, '}"
                 f"{f'CPU={cpu_p:.2f}, ' if cpu_p is not None else 'CPU=N/A, '}"
                 f"{f'MEM={mem_p:.2f}, ' if mem_p is not None else 'MEM=N/A, '}"
                 f"INST={instances}, "
@@ -216,13 +219,16 @@ class ServiceScaler:
             self.cooldown = max(0,self.cooldown - 1)
             if self.cooldown == 0:
                 self.capacity_learner.update_metrics(request_rate=local_inbound_rps,local_latency_s=local_latency_s, cpu_p=cpu_p, mem_p=mem_p, current_replicas=instances, min_replicas=min_instances)
-                self.fanout_learner.update_metrics(local_inbound_rps=local_inbound_rps, entrypoint_rps=entrypoint_rps, e2e_latency=e2e_latency, local_latency_s=local_latency_s, retry_rate=retry_rate, workload_stddev=std_dev_workload)
+                self.fanout_learner.update_metrics(local_inbound_rps=local_inbound_rps, entrypoint_rps=entrypoint_rps, successful_rate=successful_rate, retry_rate=retry_rate, workload_stddev=std_dev_workload)
             # --- Scaling decision ---
                 capacity = self.capacity_learner.get_capacity()
-                fanout = self.fanout.get_fanout()
+                fanout = self.fanout_learner.get_fanout()
                 saturated = local_latency_s > self.slo_s
                 if capacity is not None and capacity > 0:
-                    desired_replicas = max(min_instances, math.ceil(local_inbound_rps / capacity))
+                    if fanout is None:
+                        desired_replicas = max(min_instances, math.ceil(local_inbound_rps / capacity))
+                    else:
+                        desired_replicas = max(min_instances, math.ceil(fanout * entrypoint_rps / capacity))
                     scale_condition = (desired_replicas > instances and saturated) or (desired_replicas < instances and not saturated)
                     if scale_condition:
                         print(f"[{self.service_name}] Scaling {instances} -> {desired_replicas} replicas")

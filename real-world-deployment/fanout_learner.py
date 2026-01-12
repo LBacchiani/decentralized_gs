@@ -3,32 +3,21 @@ from collections import deque
 import os
 
 class ServiceFanoutLearner:
-    def __init__(self, service_name, local_slo_s, poll_interval):
+    def __init__(self, service_name):
         self.service = service_name
-        self.poll_interval = poll_interval
-
-        # parameters
-        self.local_slo_s = local_slo_s
-        self.global_slo_s = float(os.getenv("GLOBAL_SLO", 1500)) / 1000
-        self.windows_required = int(os.getenv("PLATEAU_WINDOWS", 5))
 
         # fanout tracking
         self.fanout_history = deque(maxlen=50)
         self.fanout = None
         print(f"[{self.service}] Fanout learner initialized")
 
-    def update_metrics(
-        self,
-        local_inbound_rps: float, entrypoint_rps: float,
-        e2e_latency_s: float, local_latency_s: float,
-        retry_rate: float, workload_stddev: float
-    ):
+    def update_metrics(self, local_inbound_rps: float, entrypoint_rps: float, successful_rate: float, retry_rate: float, workload_stddev: float):
         # --- basic guards ---
         if entrypoint_rps <= 0 or local_inbound_rps <= 0:
             return
 
         # --- steady-state detection ---
-        steady = e2e_latency_s < self.global_slo_s and local_latency_s < self.local_slo_s and retry_rate < 0.05 and workload_stddev < 0.1
+        steady = success_rate > 0.999 and retry_rate < 0.05 and workload_stddev < 0.1
         
 
         if not steady:
