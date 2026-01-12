@@ -12,5 +12,5 @@ ADAPTATION="$1"
 SYS="$2"
 
 
-java -jar absfrontend.jar --erlang "$ADAPTATION"/*.abs "$ADAPTATION/$SYS"/*.abs "$ADAPTATION/$SYS"/orchestrations/*.abs
+java -jar absfrontend.jar --erlang "abs/$ADAPTATION"/*.abs "abs/$ADAPTATION/$SYS"/*.abs "abs/$ADAPTATION/$SYS"/orchestrations/*.abs
 #java -jar absfrontend.jar --java "$ADAPTATION"/*.abs "$ADAPTATION/$SYS"/*.abs "$ADAPTATION/$SYS"/orchestrations/*.abs -o model.jar

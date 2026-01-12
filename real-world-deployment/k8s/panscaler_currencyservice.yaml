@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: currencyservice-autoscaler
+  namespace: default
+  labels:
+    app: currencyservice-autoscaler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: currencyservice-autoscaler
+  template:
+    metadata:
+      labels:
+        app: currencyservice-autoscaler
+    spec:
+      serviceAccountName: scaler-sa
+      containers:
+        - name: currencyservice-autoscaler
+          image: lorenzobacchiani/panscaler:latest
+          imagePullPolicy: Always
+          env:
+            - name: SERVICE_NAME
+              value: "currencyservice"
+            - name: PROMETHEUS_URL
+              value: "http://prometheus.istio-system.svc.cluster.local:9090"
+            - name: POLL_INTERVAL
+              value: "45"
+            - name: MIN_INSTANCES
+              value: "1"
+            - name: THROUGHPUT_EPSILON
+              value: "0.02"
+            - name: LATENCY_THRESHOLD_MS
+              value: "700"
+            - name: OVERLOAD_WINDOWS
+              value: "5"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+      restartPolicy: Always
