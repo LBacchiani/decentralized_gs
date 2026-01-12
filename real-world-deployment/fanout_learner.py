@@ -17,7 +17,7 @@ class ServiceFanoutLearner:
             return
 
         # --- steady-state detection ---
-        steady = success_rate > 0.999 and retry_rate < 0.05 and workload_stddev < 0.1
+        steady = successful_rate > 0.999 and retry_rate < 0.05 and workload_stddev < 0.1
         
 
         if not steady:
