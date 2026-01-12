@@ -36,7 +36,7 @@ spec:
             - name: LATENCY_THRESHOLD_MS
               value: "700"
             - name: OVERLOAD_WINDOWS
-              value: "5"
+              value: "3"
           resources:
             requests:
               cpu: "100m"

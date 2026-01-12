@@ -11,7 +11,8 @@ class ServiceCapacityLearner:
         self.windows_required = int(os.getenv("PLATEAU_WINDOWS", 5))
 
         # capacity tracking
-        self.capacity_history = deque(maxlen=50)
+        self.samples = int(os.getenv("HISTORY", 30))
+        self.capacity_history = deque(maxlen=self.samples)
         self.capacity = None
 
         # rolling sample windows
