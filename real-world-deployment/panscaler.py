@@ -2,6 +2,7 @@ import os
 import time
 import requests
 from capacity_learner import ServiceCapacityLearner
+from fanout_learner import ServiceFanoutLearner
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 import math
@@ -28,8 +29,9 @@ class ServiceScaler:
 
         # Initialize state
         self.slo_s = float(os.getenv("LATENCY_THRESHOLD_MS", 500)) / 1000
-        self.learner = ServiceCapacityLearner(self.service_name, self.prometheus_url,  self.slo_s, self.poll_interval)
-        
+        self.capacity_learner = ServiceCapacityLearner(self.service_name, self.slo_s, self.poll_interval)
+        self.fanout_learner = ServiceFanoutLearner(self.service_name, self.slo_s, self.poll_interval)
+
         # Kubernetes client
         config.load_incluster_config()
         self.apps_api = client.AppsV1Api()
@@ -176,23 +178,23 @@ class ServiceScaler:
         local_latency_s = max(total_latency_s - downstream_latency_s, 0.0)
         if local_inbound_rps > 0:
             successful_rate = successful_requests / local_inbound_rps
-            retried_rate = retried_requests / local_inbound_rps
+            retry_rate = retried_requests / local_inbound_rps
             std_dev_workload = std_dev / local_inbound_rps
         else:
             successful_rate = 1.0
-            retried_rate = 0.0
+            retry_rate = 0.0
             std_dev_workload = 0.0
-        return local_inbound_rps, entrypoint_rps, e2e_latency, local_latency_s, downstream_latency_s, successful_rate, retried_rate, std_dev_workload, cpu_p if cpu_p > 0 else None, mem_p if mem_p > 0  else None
+        return local_inbound_rps, entrypoint_rps, e2e_latency, local_latency_s, downstream_latency_s, successful_rate, retry_rate, std_dev_workload, cpu_p if cpu_p > 0 else None, mem_p if mem_p > 0  else None
 
     def run_loop(self):
         min_instances = self.get_current_replicas()
         instances = min_instances
         capacity = None
+        fanout = None
         update_inst = False
         while True:
             local_inbound_rps, entrypoint_rps, e2e_latency, local_latency_s, downstream_latency_s, \
-            successful_rate, retried_rate, std_dev_workload, cpu_p, mem_p = self.get_metrics()
-
+            successful_rate, retry_rate, std_dev_workload, cpu_p, mem_p = self.get_metrics()
             print(
                 f"[{self.service_name}] "
                 f"RPS_local={local_inbound_rps:.2f}, "
@@ -201,9 +203,10 @@ class ServiceScaler:
                 f"Local_p95={local_latency_s:.2f}s, "
                 f"Downstream_p95={downstream_latency_s:.2f}s, "
                 f"SuccRate={successful_rate:.3f}, "
-                f"RetryRate={retried_rate:.3f}, "
+                f"RetryRate={retry_rate:.3f}, "
                 f"WorkloadStd={std_dev_workload:.3f}, "
                 f"{f'Cap={capacity:.2f}, ' if capacity else 'Cap=N/A, '}"
+                f"{f'FOutut={fanout:.2f}, ' if fanout else 'FOut=N/A, '}"
                 f"{f'CPU={cpu_p:.2f}, ' if cpu_p is not None else 'CPU=N/A, '}"
                 f"{f'MEM={mem_p:.2f}, ' if mem_p is not None else 'MEM=N/A, '}"
                 f"INST={instances}, "
@@ -212,9 +215,11 @@ class ServiceScaler:
 
             self.cooldown = max(0,self.cooldown - 1)
             if self.cooldown == 0:
-                self.learner.update_metrics(request_rate=local_inbound_rps,local_latency_s=local_latency_s, cpu_p=cpu_p, mem_p=mem_p, current_replicas=instances, min_replicas=min_instances)
+                self.capacity_learner.update_metrics(request_rate=local_inbound_rps,local_latency_s=local_latency_s, cpu_p=cpu_p, mem_p=mem_p, current_replicas=instances, min_replicas=min_instances)
+                self.fanout_learner.update_metrics(local_inbound_rps=local_inbound_rps, entrypoint_rps=entrypoint_rps, e2e_latency=e2e_latency, local_latency_s=local_latency_s, retry_rate=retry_rate, workload_stddev=std_dev_workload)
             # --- Scaling decision ---
-                capacity = self.learner.get_capacity()
+                capacity = self.capacity_learner.get_capacity()
+                fanout = self.fanout.get_fanout()
                 saturated = local_latency_s > self.slo_s
                 if capacity is not None and capacity > 0:
                     desired_replicas = max(min_instances, math.ceil(local_inbound_rps / capacity))
@@ -224,7 +229,7 @@ class ServiceScaler:
                         self.scale(desired_replicas)
                         if desired_replicas > instances: 
                             self.cooldown = self.cooldown_period  
-                            self.learner.underload_episode_reset()                          
+                            self.capacity_learner.underload_episode_reset()                          
                         update_inst = True
             time.sleep(self.poll_interval)
             if update_inst:
