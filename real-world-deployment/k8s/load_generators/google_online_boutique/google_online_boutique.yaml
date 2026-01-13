@@ -1,5 +1,6 @@
----
-# ConfigMap: Modified locustfile with workload shapes
+# ============================================================
+# ConfigMap: Locust workload (unchanged logic, fixed usage)
+# ============================================================
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -158,7 +159,7 @@ data:
             return users, GROWTH_RATE
 
     # --------------------------------------------------------------------
-    # Shape selection — THIS IS THE IMPORTANT PART
+    # Shape selection
     # --------------------------------------------------------------------
 
     WORKLOAD_SHAPE = os.getenv("WORKLOAD_SHAPE", "constant")
@@ -175,12 +176,16 @@ data:
         raise ValueError(f"Unknown WORKLOAD_SHAPE: {WORKLOAD_SHAPE}")
 
 ---
-# Deployment: Constant Workload
+# ============================================================
+# Deployment: Google-equivalent loadgenerator (Locust-based)
+# ============================================================
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: loadgenerator-constant
+  name: loadgenerator
   namespace: default
+  labels:
+    app: loadgenerator
 spec:
   replicas: 1
   selector:
@@ -190,31 +195,88 @@ spec:
     metadata:
       labels:
         app: loadgenerator
+      annotations:
+        sidecar.istio.io/rewriteAppHTTPProbers: "true"
     spec:
+      serviceAccountName: loadgenerator
+      terminationGracePeriodSeconds: 1
+      restartPolicy: Always
+
+      securityContext:
+        fsGroup: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+
+      initContainers:
+      - name: frontend-check
+        image: busybox:latest
+        command:
+        - /bin/sh
+        - -exc
+        - |
+          MAX_RETRIES=12
+          RETRY_INTERVAL=10
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Attempt $i: Pinging frontend: ${FRONTEND_ADDR}..."
+            STATUSCODE=$(wget --server-response http://${FRONTEND_ADDR} 2>&1 | awk '/^  HTTP/{print $2}')
+            if [ "$STATUSCODE" -eq 200 ]; then
+              echo "Frontend is reachable."
+              exit 0
+            fi
+            echo "Error: Could not reach frontend - Status code: ${STATUSCODE}"
+            sleep $RETRY_INTERVAL
+          done
+          echo "Failed to reach frontend after $MAX_RETRIES attempts."
+          exit 1
+        env:
+        - name: FRONTEND_ADDR
+          value: "frontend:80"
+        securityContext:
+          allowPrivilegeEscalation: false
+          privileged: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+              - ALL
+
       containers:
-      - name: loadgen
-        image: locustio/locust:2.20.0
+      - name: main
+        image: lorenzobacchiani/online_boutique_load_generator
         command:
         - locust
         - --headless
+        - --locustfile=/home/locust/locustfile.py
         - --host=http://frontend:80
+
         env:
         - name: WORKLOAD_SHAPE
-          value: "constant" #it can be: constant, diurnal, flash_crowd, gradual_ramp
+          value: "flash_crowd" #it can be: constant, diurnal, flash_crowd, gradual_ramp
         - name: CONSTANT_USERS
-          value: "50"   # constant: 50, diurnal: 200, flash_crowd: 500, gradual_ramp: 250
+          value: "500"   # constant: 50, diurnal: 200, flash_crowd: 500, gradual_ramp: 250
         - name: GROWTH_RATE
-          value: "5"   # constant: 5, diurnal: 200, flash_crowd: 20, gradual_ramp: 5
+          value: "20"   # constant: 5, diurnal: 10, flash_crowd: 20, gradual_ramp: 5
+
         volumeMounts:
         - name: locustfile
           mountPath: /home/locust
+
         resources:
           requests:
-            cpu: 100m
-            memory: 256Mi
-          limits:
-            cpu: 500m
+            cpu: 1
             memory: 512Mi
+          limits:
+            cpu: 2
+            memory: 1Gi
+
+        securityContext:
+          allowPrivilegeEscalation: false
+          privileged: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+              - ALL
+
       volumes:
       - name: locustfile
         configMap:

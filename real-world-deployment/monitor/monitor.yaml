@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: panscaler-monitor
+  labels:
+    app: panscaler-monitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: panscaler-monitor
+  template:
+    metadata:
+      labels:
+        app: panscaler-monitor
+    spec:
+      containers:
+      - name: monitor
+        image: lorenzobacchiani/panscaler_monitor 
+        imagePullPolicy: Always
+        env:
+        - name: POLL_INTERVAL
+          value: "45"
+        - name: PROMETHEUS_TARGET
+          value: "http://prometheus.istio-system.svc.cluster.local:9090"
+        - name: NAMESPACE
+          value: "default"
+        - name: DEPLOYMENTS
+          value: "frontend|cartservice|productcatalogservice|currencyservice|paymentservice|shippingservice|emailservice|checkoutservice|recommendationservice|adservice"
+        - name: WORKLOAD_DELTA_THRESHOLD
+          value: "0.3"
+        - name: WINDOW_SIZE
+          value: "10"
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
