@@ -127,7 +127,7 @@ class ServiceScaler:
         retried_requests_query = f"""
         sum(
             rate(istio_requests_total{{
-                source_workload="{self.service_name}",
+                destination_workload="{self.service_name}",
                 reporter="destination",
                 response_flags=~".*R.*"
             }}[{self.poll_interval}s])
