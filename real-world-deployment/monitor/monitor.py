@@ -321,7 +321,7 @@ def per_service_metrics():
                   rate(istio_requests_total{{
                     destination_app="{svc}",
                     reporter="destination"
-                  }}[1m])
+                  }}[{POLL_INTERVAL}s])
                 )
                 '''
             )
@@ -334,7 +334,7 @@ def per_service_metrics():
                     rate(istio_request_duration_milliseconds_bucket{{
                       destination_app="{svc}",
                       reporter="destination"
-                    }}[1m])
+                    }}[{POLL_INTERVAL}s])
                   ) by (le)
                 ) / 1000
                 '''
@@ -357,7 +357,7 @@ def per_service_metrics():
                     pod=~"{svc}.*",
                     container!="POD",
                     container!=""
-                  }}[1m])
+                  }}[{POLL_INTERVAL}s])
                 )
                 '''
             )
