@@ -1,0 +1,221 @@
+---
+# ConfigMap: Modified locustfile with workload shapes
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: locustfile-config
+  namespace: default
+data:
+  locustfile.py: |
+    #!/usr/bin/python
+    #
+    # Copyright 2018 Google LLC
+    #
+
+    import random
+    import os
+    import datetime
+    from locust import FastHttpUser, TaskSet, between, LoadTestShape
+    from faker import Faker
+
+    fake = Faker()
+
+    # --------------------------------------------------------------------
+    # Application behavior
+    # --------------------------------------------------------------------
+
+    products = [
+        '0PUK6V6EV0', '1YMWWN1N4O', '2ZYFJ3GM2N',
+        '66VCHSJNUP', '6E92ZMYYFZ', '9SIQT8TOJO',
+        'L9ECAV7KIM', 'LS4PSXUNUM', 'OLJCESPC7Z'
+    ]
+
+    def index(l):
+        l.client.get("/")
+
+    def setCurrency(l):
+        l.client.post("/setCurrency", {
+            "currency_code": random.choice(['EUR', 'USD', 'JPY', 'CAD', 'GBP', 'TRY'])
+        })
+
+    def browseProduct(l):
+        l.client.get("/product/" + random.choice(products))
+
+    def viewCart(l):
+        l.client.get("/cart")
+
+    def addToCart(l):
+        product = random.choice(products)
+        l.client.get("/product/" + product)
+        l.client.post("/cart", {
+            "product_id": product,
+            "quantity": random.randint(1, 10),
+        })
+
+    def checkout(l):
+        addToCart(l)
+        year = datetime.datetime.now().year + 1
+        l.client.post("/cart/checkout", {
+            "email": fake.email(),
+            "street_address": fake.street_address(),
+            "zip_code": fake.zipcode(),
+            "city": fake.city(),
+            "state": fake.state_abbr(),
+            "country": fake.country(),
+            "credit_card_number": fake.credit_card_number(card_type="visa"),
+            "credit_card_expiration_month": random.randint(1, 12),
+            "credit_card_expiration_year": random.randint(year, year + 70),
+            "credit_card_cvv": str(random.randint(100, 999)),
+        })
+
+    class UserBehavior(TaskSet):
+        def on_start(self):
+            index(self)
+
+        tasks = {
+            index: 1,
+            setCurrency: 5,
+            browseProduct: 15,
+            addToCart: 6,
+            viewCart: 4,
+            checkout: 3,
+        }
+
+    class WebsiteUser(FastHttpUser):
+        tasks = [UserBehavior]
+        wait_time = between(1, 10)
+
+    # --------------------------------------------------------------------
+    # Workload shapes
+    # --------------------------------------------------------------------
+
+    MAX_USERS = int(os.getenv("MAX_USERS", "500"))
+    GROWTH_RATE = int(os.getenv("GROWTH_RATE", "10"))
+
+    class ConstantShape(LoadTestShape):
+        def tick(self):
+            return int(os.getenv("CONSTANT_USERS", "50")), GROWTH_RATE
+
+    class DiurnalShape(LoadTestShape):
+        def tick(self):
+            t = self.get_run_time()
+            if t > 7200:
+                return None
+            hour = (t / 300) % 24
+            peak = MAX_USERS
+
+            if hour < 6:
+                users = int(peak * 0.05)
+            elif hour < 12:
+                users = int(peak * 0.5)
+            elif hour < 18:
+                users = int(peak * 0.4)
+            else:
+                users = peak
+
+            return users, GROWTH_RATE
+
+    class FlashCrowdShape(LoadTestShape):
+        def tick(self):
+            t = self.get_run_time()
+            peak = MAX_USERS
+            base = int(peak * 0.1)
+
+            if t < 300:
+                users = base
+            elif t < 420:
+                users = int(base + (t - 300) / 120 * (peak - base))
+            elif t < 1620:
+                users = peak
+            elif t < 1920:
+                users = int(peak - (t - 1620) / 300 * (peak - base))
+            else:
+                users = base
+
+            if t > 3600:
+                return None
+            return users, GROWTH_RATE
+
+    class GradualRampShape(LoadTestShape):
+        def tick(self):
+            t = self.get_run_time()
+            peak = MAX_USERS
+            base = int(peak * 0.08)
+
+            if t < 600:
+                users = base
+            elif t < 1800:
+                users = int(base + (t - 600) / 1200 * (peak - base))
+            elif t < 3600:
+                users = peak
+            elif t < 4800:
+                users = int(peak - (t - 3600) / 1200 * (peak - base))
+            else:
+                users = base
+
+            if t > 5400:
+                return None
+            return users, GROWTH_RATE
+
+    # --------------------------------------------------------------------
+    # Shape selection — THIS IS THE IMPORTANT PART
+    # --------------------------------------------------------------------
+
+    WORKLOAD_SHAPE = os.getenv("WORKLOAD_SHAPE", "constant")
+
+    if WORKLOAD_SHAPE == "constant":
+        class ActiveShape(ConstantShape): pass
+    elif WORKLOAD_SHAPE == "diurnal":
+        class ActiveShape(DiurnalShape): pass
+    elif WORKLOAD_SHAPE == "flash_crowd":
+        class ActiveShape(FlashCrowdShape): pass
+    elif WORKLOAD_SHAPE == "gradual_ramp":
+        class ActiveShape(GradualRampShape): pass
+    else:
+        raise ValueError(f"Unknown WORKLOAD_SHAPE: {WORKLOAD_SHAPE}")
+
+---
+# Deployment: Constant Workload
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loadgenerator-constant
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: loadgenerator
+  template:
+    metadata:
+      labels:
+        app: loadgenerator
+    spec:
+      containers:
+      - name: loadgen
+        image: locustio/locust:2.20.0
+        command:
+        - locust
+        - --headless
+        - --host=http://frontend:80
+        env:
+        - name: WORKLOAD_SHAPE
+          value: "constant" #it can be: constant, diurnal, flash_crowd, gradual_ramp
+        - name: CONSTANT_USERS
+          value: "50"   # constant: 50, diurnal: 200, flash_crowd: 500, gradual_ramp: 250
+        - name: GROWTH_RATE
+          value: "5"   # constant: 5, diurnal: 200, flash_crowd: 20, gradual_ramp: 5
+        volumeMounts:
+        - name: locustfile
+          mountPath: /home/locust
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+      volumes:
+      - name: locustfile
+        configMap:
+          name: locustfile-config
