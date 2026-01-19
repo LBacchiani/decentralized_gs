@@ -35,8 +35,8 @@ spec:
               value: "0.02"
             - name: LATENCY_THRESHOLD_MS
               value: "1500"
-            - name: OVERLOAD_WINDOWS
-              value: "3"
+            - name: PLATEAU_WINDOWS
+              value: "2"
           resources:
             requests:
               cpu: "100m"

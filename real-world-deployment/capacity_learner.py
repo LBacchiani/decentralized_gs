@@ -26,18 +26,18 @@ class ServiceCapacityLearner:
         print(f"[{self.service}] Capacity learner initialized")
 
     def update_metrics(
-        self, request_rate: float, local_latency_s: float, cpu_p: float, mem_p: float,  current_replicas: int, min_replicas: int):
+        self, request_rate: float, queue_delay_s: float, cpu_p: float, mem_p: float,  current_replicas: int, min_replicas: int):
         # --- sanitize cpu/mem fractions ---
         cpu_p = cpu_p if cpu_p is not None and cpu_p > 0 else 1
         mem_p = mem_p if mem_p is not None and mem_p > 0 else 1
 
 
         # --- detect overload ---
-        saturated = local_latency_s > self.slo_s
+        saturated = queue_delay_s > self.slo_s
 
         if saturated:
             print(f"[{self.service}] *****OVERLOAD DETECTED*****")
-            self.overload_samples.append((request_rate, local_latency_s))
+            self.overload_samples.append((request_rate, queue_delay_s))
             if len(self.overload_samples) >= self.windows_required:
                 smoothed_mu = self._compute_smoothed_capacity(self.overload_samples, current_replicas)
                 self.capacity_history.append(smoothed_mu)
@@ -46,10 +46,10 @@ class ServiceCapacityLearner:
 
         
         # --- detect underload ---
-        underload = not saturated and cpu_p < 0.75 and mem_p < 0.75 and current_replicas > min_replicas and not self.underload_episode
+        underload = not saturated and cpu_p < 0.5 and mem_p < 0.5 and current_replicas > min_replicas and not self.underload_episode
         if underload:
             print(f"[{self.service}] *****UNDERLOAD DETECTED*****")
-            self.underload_samples.append((request_rate, local_latency_s))
+            self.underload_samples.append((request_rate, queue_delay_s))
             if len(self.underload_samples) >= self.windows_required:
                 smoothed_mu = self._compute_smoothed_capacity(self.underload_samples, max(current_replicas - 1, min_replicas))
                 self.capacity_history.append(smoothed_mu)

@@ -251,11 +251,11 @@ spec:
 
         env:
         - name: WORKLOAD_SHAPE
-          value: "flash_crowd" #it can be: constant, diurnal, flash_crowd, gradual_ramp
+          value: "constant" #it can be: constant, diurnal, flash_crowd, gradual_ramp
         - name: CONSTANT_USERS
-          value: "500"   # constant: 50, diurnal: 200, flash_crowd: 500, gradual_ramp: 250
+          value: "50"   # constant: 50, diurnal: 200, flash_crowd: 500, gradual_ramp: 250
         - name: GROWTH_RATE
-          value: "20"   # constant: 5, diurnal: 10, flash_crowd: 20, gradual_ramp: 5
+          value: "5"   # constant: 5, diurnal: 10, flash_crowd: 20, gradual_ramp: 5
 
         volumeMounts:
         - name: locustfile

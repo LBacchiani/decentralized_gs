@@ -34,9 +34,9 @@ spec:
             - name: THROUGHPUT_EPSILON
               value: "0.02"
             - name: LATENCY_THRESHOLD_MS
-              value: "700"
-            - name: OVERLOAD_WINDOWS
-              value: "3"
+              value: "500"
+            - name: PLATEAU_WINDOWS
+              value: "2"
           resources:
             requests:
               cpu: "100m"
