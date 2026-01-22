@@ -1,11 +1,12 @@
 import os
 import time
 import requests
-from capacity_learner import ServiceCapacityLearner
-from fanout_learner import ServiceFanoutLearner
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 import math
+from collections import deque
+from prometheus_query import *
+
 
 class ServiceScaler:
     def __init__(self):
@@ -17,10 +18,7 @@ class ServiceScaler:
         if not self.entrypoint:
             raise ValueError("ENTRYPOINT must be set")
 
-        self.prometheus_url = os.getenv(
-            "PROMETHEUS_URL",
-            "http://prometheus.monitoring.svc.cluster.local:9090",
-        )
+        self.prometheus_url = os.getenv( "PROMETHEUS_URL","http://prometheus.monitoring.svc.cluster.local:9090", )
         self.poll_interval = int(os.getenv("POLL_INTERVAL", 45))
 
         self.cooldown_period = math.ceil(int((os.getenv("SCALE_COOLDOWN", 60))) /  self.poll_interval)  # seconds
@@ -28,10 +26,12 @@ class ServiceScaler:
         self.cooldown = 0
         
 
-        # Initialize state
-        self.slo_s = float(os.getenv("LATENCY_THRESHOLD_MS", 500)) / 1000
-        self.capacity_learner = ServiceCapacityLearner(self.service_name, self.slo_s)
-        self.fanout_learner = ServiceFanoutLearner(self.service_name)
+        self.local_slo_s = float(os.getenv("LATENCY_THRESHOLD_MS", 500)) / 1000
+        self.sys_slo_s = float(os.getenv("SYS_THRESHOLD_MS", 1500)) / 1000
+
+        self.samples = int(os.getenv("HISTORY", 30))
+        self.capacity_history = deque(maxlen=self.samples)
+        self.fanout_history = deque(maxlen=self.samples)
 
         # Kubernetes client
         config.load_incluster_config()
@@ -39,6 +39,29 @@ class ServiceScaler:
 
         self.namespace = os.getenv("NAMESPACE", "default")
         self.deployment_name = self.service_name
+
+        self.prev_elements = {"polished_lat": 0, "cpu": 0, "rps": 0}
+        self.EPS_LAT = 0.10    # 10% latency inflation
+        self.EPS_CPU = 0.05    # 5% cpu growth ceiling
+        self.probing_scale_down = False
+
+
+
+
+    def is_at_knee(self, polished_lat, cpu_per_replica):
+        prev = self.prev_elements
+
+        # Guard against first iteration or bad data
+        if prev["polished_lat"] <= 0 or prev["cpu"] <= 0.01:
+            return False, None, None
+            
+        r_T = polished_lat / prev["polished_lat"]
+        r_CPU = cpu_per_replica / prev["cpu"]
+
+
+        knee = (r_T >= 1.0 + self.EPS_LAT) and (1 <= r_CPU <= 1.0 + self.EPS_CPU)
+
+        return knee, r_T, r_CPU
 
 
     def query_prometheus(self, query: str, aggregate="sum") -> float:
@@ -64,229 +87,29 @@ class ServiceScaler:
         except Exception as e:
             print(f"[{self.service_name}] Prometheus query failed: {e}")
             return 0.0
-        
-    def get_load_metrics(self):
-        inbound_query = f"""
-            sum(
-            rate(istio_requests_total{{
-                destination_workload="{self.service_name}",
-                reporter="destination"
-            }}[{self.poll_interval}s])
-            )
-        """
-        inbound_entrypoint_query = f"""
-            sum(
-                rate(istio_requests_total{{
-                    destination_workload="{self.entrypoint}",
-                    reporter="destination"
-                }}[{self.poll_interval}s])
-            )
-        """
 
+
+    def get_metrics(self):
         inbound_workload = self.query_prometheus(inbound_query)
         inbound_entrypoint = self.query_prometheus(inbound_entrypoint_query)
-
-        return inbound_workload, inbound_entrypoint
-
-
-    def get_capacity_metrics(self):
-        duration_sum_query = f"""
-            sum(
-                rate(istio_request_duration_milliseconds_sum{{
-                    destination_workload="{self.service_name}",
-                    reporter="destination"
-                }}[{self.poll_interval}s])
-            )
-        """
-        duration_count_query = f"""
-            sum(
-                rate(istio_request_duration_milliseconds_count{{
-                    destination_workload="{self.service_name}",
-                    reporter="destination"
-                }}[{self.poll_interval}s])
-            )
-        """
-        duration_sum_query_prev = f"""
-            sum(
-                rate(istio_request_duration_milliseconds_sum{{
-                    destination_workload="{self.service_name}",
-                    reporter="destination"
-                }}[{self.poll_interval}s] offset {self.poll_interval}s)
-            )
-        """
-        duration_count_query_prev = f"""
-            sum(
-                rate(istio_request_duration_milliseconds_count{{
-                    destination_workload="{self.service_name}",
-                    reporter="destination"
-                }}[{self.poll_interval}s] offset {self.poll_interval}s)
-            )
-        """
-        max_downstream_latency_query = f"""
-        max(
-            (
-                sum by (destination_workload) (
-                    rate(istio_request_duration_milliseconds_sum{{
-                        source_workload="{self.service_name}",
-                        reporter="source"
-                    }}[{self.poll_interval}s])
-                )
-            )
-            /
-            (
-                sum by (destination_workload) (
-                    rate(istio_request_duration_milliseconds_count{{
-                        source_workload="{self.service_name}",
-                        reporter="source"
-                    }}[{self.poll_interval}s])
-                )
-            )
-        )
-        """
-
         total_latency_s = self.query_prometheus(duration_sum_query) / 1000
         latency_elements = self.query_prometheus(duration_count_query)
-        total_latency_s_prev = self.query_prometheus(duration_sum_query_prev) / 1000
-        latency_elements_prev = self.query_prometheus(duration_count_query_prev)
-        avg_total_latency, max_downstream, avg_total_latency_prev = None, None, None
-        if latency_elements = 0:
+        total_cpu = self.query_prometheus(cpu_usage_query)
+        successful_requests = self.query_prometheus(successful_requests_query)
+        retried_requests = self.query_prometheus(retried_requests_query)
+        cpu_period = self.query_prometheus(cpu_period_query)
+        cpu_spec_total_quota = self.query_prometheus(cpu_spec_total_quota_query)
+        cpu_spec_istio_quota = self.query_prometheus(cpu_spec_istio_quota_query)
+        cpu_pod_quota = (cpu_spec_total_quota - cpu_spec_istio_quota) / cpu_period
+        polished_total_lat, max_downstream = 0, 0
+        if latency_elements != 0:
             avg_total_latency = total_latency_s / latency_elements
             max_downstream = self.query_prometheus(max_downstream_latency_query) / 1000
-            avg_service_time = max(avg_total_latency - max_downstream, 0.0)
-            if latency_elements_prev != 0:
-                avg_total_latency_prev = total_latency_s_prev / latency_elements_prev
-        return avg_service_time, max_downstream, total_latency_s/avg_total_latency_prev
+            polished_total_lat = max(avg_total_latency - max_downstream, 0.0)
+        return inbound_workload, inbound_entrypoint, polished_total_lat, max_downstream, successful_requests, retried_requests, total_cpu, cpu_pod_quota
 
 
-    # def get_metrics(self):
-
-    #     cpu_usage_query = f"""rate(container_cpu_usage_seconds_total{{pod=~"{self.service_name}.*", pod!~".*autoscaler.*", container="server"}}[{self.poll_interval}s]) * 100000"""
-    #     cpu_limit_query = f"""container_spec_cpu_quota{{pod=~"{self.service_name}.*", pod!~".*autoscaler.*", container="server"}}"""
-    #     mem_usage_query = f"""avg(container_memory_working_set_bytes{{pod=~"{self.service_name}.*", pod!~".*autoscaler.*", container="server"}})"""
-    #     mem_limit_query = f"""avg(container_spec_memory_limit_bytes{{pod=~"{self.service_name}.*", pod!~".*autoscaler.*", container="server"}})"""
-    #     # --- Inbound throughput (req/s) ---
-
-
-    #     # --- Outbound latency to downstreams (p95, ms) ---
-    #     downstream_latency_query = f"""
-    #     max(
-    #         histogram_quantile(
-    #             0.95,
-    #             sum(
-    #             rate(istio_request_duration_milliseconds_bucket{{
-    #                 source_workload="{self.service_name}",
-    #                 reporter="destination"
-    #             }}[{self.poll_interval}s])
-    #             ) by (le, destination_service)
-    #         )
-    #     )
-    #     """
-
-    #     # --- Total latency for requests from this service (p95, ms) ---
-    #     total_latency_query = f"""
-    #     histogram_quantile(
-    #       0.95,
-    #       sum(
-    #         rate(istio_request_duration_milliseconds_bucket{{
-    #           destination_workload="{self.service_name}",
-    #           reporter="source"
-    #         }}[{self.poll_interval}s])
-    #       ) by (le)
-    #     )
-    #     """
-    #     # ---Total requests entering the system ---
-
-    #     successful_requests_query = f"""
-    #         sum(
-    #             rate(istio_requests_total{{
-    #                 destination_workload="{self.service_name}",
-    #                 reporter="source",
-    #                 response_code!~"5.."
-    #             }}[{self.poll_interval}s])
-    #         )
-    #     """
-
-    #     retried_requests_query = f"""
-    #     sum(
-    #         rate(istio_requests_total{{
-    #             destination_workload="{self.service_name}",
-    #             reporter="destination",
-    #             response_flags=~".*R.*"
-    #         }}[{self.poll_interval}s])
-    #     )
-    #     """
-
-    #     std_dev_query = f"""
-    #     stddev_over_time(
-    #         sum(rate(istio_requests_total{{
-    #             destination_workload="{self.service_name}",
-    #             reporter="source"
-    #         }}[{self.poll_interval}s]))[3m:]
-    #     )
-    #     """
-    
-    #     # e2e_latency_s_query = f"""
-    #     # histogram_quantile(
-    #     #     0.95,
-    #     #     sum(
-    #     #         rate(istio_request_duration_milliseconds_bucket{{
-    #     #         destination_workload="{self.entrypoint}",
-    #     #         reporter="source"
-    #     #         }}[{self.poll_interval}s])
-    #     #     ) by (le)
-    #     # )
-    #     # """
-
-    #     last_window_rps_query = f"""
-    #         sum(
-    #             rate(istio_requests_total{{
-    #             destination_workload="{self.service_name}",
-    #             reporter="source"
-    #             }}[{self.poll_interval}s] offset {self.poll_interval}s)
-    #         )
-        
-    #     """
-
-    #     local_inbound_rps = self.query_prometheus(inbound_query)
-    #     last_window_rps = self.query_prometheus(last_window_rps_query)
-    #     entrypoint_rps = self.query_prometheus(inbound_entrypoint_query)
-    #     total_latency_s = self.query_prometheus(total_latency_query) / 1000.0
-    #     downstream_latency_s = self.query_prometheus(downstream_latency_query) / 1000.0
-    #     # e2e_latency_s = self.query_prometheus(e2e_latency_s_query) / 1000.0
-    #     successful_requests = self.query_prometheus(successful_requests_query)
-    #     retried_requests = self.query_prometheus(retried_requests_query)
-    #     std_dev = self.query_prometheus(std_dev_query)
-    #     cpu_usage = self.query_prometheus(cpu_usage_query)
-    #     cpu_limit = self.query_prometheus(cpu_limit_query)
-    #     mem_usage = self.query_prometheus(mem_usage_query)
-    #     mem_limit = self.query_prometheus(mem_limit_query)
-    #     cpu_p = 0
-    #     mem_p = 0 
-    #     if cpu_limit > 0:
-    #         cpu_p = cpu_usage/cpu_limit
-    #     if mem_limit > 0:
-    #         mem_p = mem_usage/mem_limit
-
-    #     # Local tail latency = total - downstream
-    #     local_latency_s = max(total_latency_s - downstream_latency_s, 0.0)
-    #     if local_inbound_rps > 0:
-    #         successful_rate = successful_requests / local_inbound_rps
-    #         retry_rate = retried_requests / local_inbound_rps
-    #         std_dev_workload = std_dev / local_inbound_rps
-    #     else:
-    #         successful_rate = 1.0
-    #         retry_rate = 0.0
-    #         std_dev_workload = 0.0
-            
-    #     if last_window_rps > 0:
-    #         rps_delta_pct = (local_inbound_rps - last_window_rps) / last_window_rps
-    #     else:
-    #         rps_delta_pct = 0.0
-
-    #     # return local_inbound_rps, entrypoint_rps, e2e_latency_s, local_latency_s, downstream_latency_s, successful_rate, retry_rate, std_dev_workload, cpu_p if cpu_p > 0 else None, mem_p if mem_p > 0  else None
-
-    #     return local_inbound_rps, self.margin * entrypoint_rps, rps_delta_pct, local_latency_s, downstream_latency_s, successful_rate, retry_rate, std_dev_workload, cpu_p if cpu_p > 0 else None, mem_p if mem_p > 0  else None
-
+  
     def run_loop(self):
         min_instances = self.get_current_replicas()
         instances = min_instances
@@ -294,85 +117,87 @@ class ServiceScaler:
         fanout = None
         update_inst = False
         while True:
-            # local_inbound_rps, entrypoint_rps, e2e_latency_s, local_latency_s, downstream_latency_s, \
-            # local_inbound_rps, entrypoint_rps, rps_delta_pct, local_latency_s, downstream_latency_s, \
-            # successful_rate, retry_rate, std_dev_workload, cpu_p, mem_p = self.get_metrics()
-            local_inbound_rps, entrypoint_rps = self.get_load_metrics()
-            avg_service_time, max_downstream, avg_total_latency_ratio = self.get_capacity_metrics()
+            local_inbound_rps, entrypoint_rps, polished_total_lat, max_downstream, successful_requests, retried_requests, total_cpu, cpu_pod_quota = self.get_metrics()
+            cpu_per_replica = total_cpu / instances
+            cpu_usage = cpu_per_replica / cpu_pod_quota
+            local_inbound_rps_prev =  self.prev_elements['rps']
+            rps_delta_pct, successful_rate, retry_rate = 0,0,0
+            knee, r_T, r_CPU = False, None, None
+            if local_inbound_rps > 0:
+                successful_rate = successful_requests / local_inbound_rps
+                retry_rate = retried_requests / local_inbound_rps
+            if local_inbound_rps_prev > 0:
+                rps_delta_pct = (local_inbound_rps - local_inbound_rps_prev) / local_inbound_rps_prev
+            steady = self.cooldown == 0 and successful_rate > 0.999 and retry_rate < 0.05 and abs(rps_delta_pct) < 0.1
+            if self.probing_scale_down:
+                if steady:
+                    knee, r_T, r_CPU = self.is_at_knee(polished_total_lat, cpu_per_replica)
+                    if knee or instances == min_instances:
+                        self.probing_scale_down = False
+                else:
+                    self.probing_scale_down = False
+
+
+            ######LEARNING CAPACITY AND FANOUT#########
+            if polished_total_lat < self.local_slo_s and not knee:
+                curr_capacity = local_inbound_rps / instances
+                self.capacity_history.append(curr_capacity)
+                capacity = self._compute_capacity()
+            if steady:
+                fanout_sample = local_inbound_rps / entrypoint_rps
+                self.fanout_history.append(fanout_sample)
+                fanout = self._compute_fanout()
+
+            clear_overprovisioned = (instances > min_instances and cpu_usage < 0.5 and max_downstream < self.sys_slo_s and steady )
+
+            #############################################
+  
             print(
                 f"[{self.service_name}] "
                 f"RPS_local={local_inbound_rps:.2f}, "
                 f"RPS_entry={entrypoint_rps:.2f}, "
-                f"E[S]={avg_service_time:.2f}s, "
+                f"C={capacity:.2f}, " if capacity else "C=N/A, "             
+                f"Fout={fanout:.2f}, " if fanout else "Fout=N/A, "                   
+                f"E[S]={polished_total_lat:.2f}s "
                 f"MAX(E[D])={max_downstream:.2f}s, "
-                f"E[T]_t/E[T]_(t-1)={avg_total_latency_ratio:.2f}s, "
+                f"CPU%={(cpu_usage*100):.2f}%, "
+                f"r_T={r_T if r_T is not None else float('nan'):.2f}, "
+                f"r_CPU={r_CPU if r_CPU is not None else float('nan'):.2f}, "
+                f"KNEE={knee} "
                 f"INST={instances} "
             )
-            # print(
-            #     f"[{self.service_name}] "
-            #     f"RPS_local={local_inbound_rps:.2f}, "
-            #     f"RPS_entry={entrypoint_rps:.2f}, "
-            #     # f"E2E_p95={e2e_latency_s:.2f}s, "
-            #     f"Local_p95={local_latency_s:.2f}s, "
-            #     f"Downstream_p95={downstream_latency_s:.2f}s, "
-            #     f"SuccRate={successful_rate:.3f}, "
-            #     f"RetryRate={retry_rate:.3f}, "
-            #     f"WorkloadStd={std_dev_workload:.3f}, "
-            #     f"{f'Cap={capacity:.2f}, ' if capacity else 'Cap=N/A, '}"
-            #     f"{f'FOut={fanout:.2f}, ' if fanout else 'FOut=N/A, '}"
-            #     f"{f'CPU={cpu_p:.2f}, ' if cpu_p is not None else 'CPU=N/A, '}"
-            #     f"{f'MEM={mem_p:.2f}, ' if mem_p is not None else 'MEM=N/A, '}"
-            #     f"INST={instances} "
-            # )
+            self.cooldown = max(0,self.cooldown - 1)
+            
+            # --- Scaling decision ---
 
-            # self.cooldown = max(0,self.cooldown - 1)
-            # if self.cooldown == 0:
-            #     self.capacity_learner.update_metrics(request_rate=local_inbound_rps,local_latency_s=local_latency_s, cpu_p=cpu_p, mem_p=mem_p, current_replicas=instances, min_replicas=min_instances)
-            #     self.fanout_learner.update_metrics(local_inbound_rps=local_inbound_rps, entrypoint_rps=entrypoint_rps, successful_rate=successful_rate, retry_rate=retry_rate, workload_stddev=std_dev_workload)
-            # # --- Scaling decision ---
-            # if self.cooldown == 0 or rps_delta_pct > 0 and rps_delta_pct < 0.05:
-            #     capacity = self.capacity_learner.get_capacity()
-            #     fanout = self.fanout_learner.get_fanout()
-            #     saturated = local_latency_s > self.slo_s
-            #     if capacity is not None and capacity > 0:
-            #         if fanout is None:
-            #             desired_replicas = max(min_instances, math.ceil(local_inbound_rps / capacity))
-            #         else:
-            #             desired_replicas = max(min_instances, math.ceil(fanout * entrypoint_rps / capacity))
-            #         scale_condition = (desired_replicas > instances and saturated) or (desired_replicas < instances and not saturated)
-            #         if scale_condition:
-            #             print(f"[{self.service_name}] Scaling {instances} -> {desired_replicas} replicas")
-            #             self.scale(desired_replicas)
-            #             if desired_replicas > instances:                             
-            #                 self.cooldown = self.cooldown_period  
-            #                 self.capacity_learner.underload_episode_reset()                          
-            #             update_inst = True
+            if self.cooldown == 0 or abs(rps_delta_pct) >= 0.1 or knee:
+                self.prev_elements['rps'] = local_inbound_rps
+                if capacity is not None and capacity > 0:
+                    if fanout is None:
+                        desired_replicas = max(min_instances, math.ceil(local_inbound_rps / capacity))
+                    else:
+                        desired_replicas = max(min_instances, math.ceil(fanout * entrypoint_rps / capacity))     
+                    scale_up = desired_replicas > instances and polished_total_lat > self.local_slo_s
+                    scale_down = desired_replicas < instances and clear_overprovisioned
+
+                    scale_condition = scale_up or scale_down
+                    if scale_condition:
+                        print(f"[{self.service_name}] Scaling {instances} -> {desired_replicas} replicas")
+                        self.scale(desired_replicas)
+                        if desired_replicas > instances: 
+                            self.cooldown = self.cooldown_period  
+                        if desired_replicas < instances:
+                            self.prev_elements["polished_lat"] = polished_total_lat 
+                            self.prev_elements["cpu"] =  cpu_per_replica
+                            self.probing_scale_down = True
+                        update_inst = True
             time.sleep(self.poll_interval)
             if update_inst:
                 instances = self.get_current_replicas()
                 update_inst = False
-            print(
-                f"[{self.service_name}] "
-                f"RPS_local={local_inbound_rps:.2f}, "
-                f"RPS_entry={entrypoint_rps:.2f}, "
-                # f"E2E_p95={e2e_latency_s:.2f}s, "
-                f"Local_p95={local_latency_s:.2f}s, "
-                f"Downstream_p95={downstream_latency_s:.2f}s, "
-                f"SuccRate={successful_rate:.3f}, "
-                f"RetryRate={retry_rate:.3f}, "
-                f"WorkloadStd={std_dev_workload:.3f}, "
-                f"{f'Cap={capacity:.2f}, ' if capacity else 'Cap=N/A, '}"
-                f"{f'FOut={fanout:.2f}, ' if fanout else 'FOut=N/A, '}"
-                f"{f'CPU={cpu_p:.2f}, ' if cpu_p is not None else 'CPU=N/A, '}"
-                f"{f'MEM={mem_p:.2f}, ' if mem_p is not None else 'MEM=N/A, '}"
-                f"INST={instances} "
-            )
 
     def get_current_replicas(self) -> int:
-        dep = self.apps_api.read_namespaced_deployment(
-            name=self.deployment_name,
-            namespace=self.namespace,
-        )
+        dep = self.apps_api.read_namespaced_deployment(name=self.deployment_name, namespace=self.namespace,)
         return dep.status.ready_replicas or dep.spec.replicas or 0
 
     def scale(self, replicas: int):
@@ -383,21 +208,37 @@ class ServiceScaler:
         }
 
         try:
-            self.apps_api.patch_namespaced_deployment(
-                name=self.deployment_name,
-                namespace=self.namespace,
-                body=body,
-            )
+            self.apps_api.patch_namespaced_deployment(name=self.deployment_name,namespace=self.namespace,body=body)
             print(
                 f"[{self.service_name}] Scaled Deployment "
                 f"{self.deployment_name} to {replicas} replicas"
             )
 
         except ApiException as e:
-            print(
-                f"[{self.service_name}] Failed to scale Deployment: {e}"
-            )
+            print(f"[{self.service_name}] Failed to scale Deployment: {e}")
 
+    def _compute_capacity(self):
+        n = len(self.capacity_history)
+        if n < 5:
+            capacity = sum(self.capacity_history) / n
+        else:
+            sorted_caps = sorted(self.capacity_history)
+            trim = math.floor(0.25 * n)
+            upper = sorted_caps[trim:]
+            capacity = sum(upper) / len(upper)
+        return capacity
+
+    def _compute_fanout(self):
+        n = len(self.fanout_history)
+        if n < 5:
+            fanout = sum(self.fanout_history) / n
+        else:
+            sorted_samples = sorted(self.fanout_history)
+            trim = math.floor(0.25 * n)
+            middle = sorted_samples[trim : n - trim]
+            smoothed = sum(middle) / len(middle)
+            fanout = smoothed
+        return fanout
 
 
 if __name__ == "__main__":

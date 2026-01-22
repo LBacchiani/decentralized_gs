@@ -33,6 +33,8 @@ spec:
               value: "1"
             - name: THROUGHPUT_EPSILON
               value: "0.02"
+            - name: SYS_THRESHOLD_MS
+              value: "1500"
             - name: LATENCY_THRESHOLD_MS
               value: "500"
             - name: PLATEAU_WINDOWS

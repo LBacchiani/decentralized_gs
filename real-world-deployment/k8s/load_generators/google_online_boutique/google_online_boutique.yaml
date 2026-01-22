@@ -2,6 +2,11 @@
 # ConfigMap: Locust workload (unchanged logic, fixed usage)
 # ============================================================
 apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: loadgenerator
+---
+apiVersion: v1
 kind: ConfigMap
 metadata:
   name: locustfile-config

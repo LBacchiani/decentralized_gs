@@ -9,8 +9,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy autoscaler code
-COPY capacity_learner.py .
-COPY fanout_learner.py .
+COPY prometheus_query.py .
 COPY panscaler.py .
 
 # Set environment variables defaults (can be overridden in the pod YAML)
