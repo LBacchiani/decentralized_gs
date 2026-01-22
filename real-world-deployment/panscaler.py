@@ -22,9 +22,7 @@ class ServiceScaler:
         )
         self.poll_interval = int(os.getenv("POLL_INTERVAL", 45))
 
-        self.cooldown_period = math.ceil(int(os.getenv("SCALE_COOLDOWN", 60)) / self.poll_interval)
         self.margin = float(os.getenv("MARGIN", 1.3))
-        self.cooldown = 0
 
         self.local_slo_s = float(os.getenv("LATENCY_THRESHOLD_MS", 500)) / 1000
         self.sys_slo_s = float(os.getenv("SYS_THRESHOLD_MS", 1500)) / 1000
@@ -121,16 +119,23 @@ class ServiceScaler:
 
             # Compute rates
             prev_rps = self.prev_elements["rps"]
+            self.prev_elements["rps"] = local_inbound_rps
             rps_delta_pct = ((local_inbound_rps - prev_rps) / prev_rps) if prev_rps > 0 else 0
             successful_rate = (successful_requests / local_inbound_rps) if local_inbound_rps > 0 else 0
             retry_rate = (retried_requests / local_inbound_rps) if local_inbound_rps > 0 else 0
 
             # Determine if system is steady
             steady = (
-                self.cooldown == 0
-                and successful_rate > 0.999
+                successful_rate > 0.999
                 and retry_rate < 0.05
                 and abs(rps_delta_pct) < 0.1
+            )
+
+            clear_overprovisioned = (
+                instances > min_instances
+                and cpu_usage < 0.5
+                and max_downstream < self.sys_slo_s
+                and steady
             )
 
             # --- Probe for knee if scale-down was triggered ---
@@ -155,12 +160,7 @@ class ServiceScaler:
                 self.fanout_history.append(fanout_sample)
                 fanout = self._compute_fanout()
 
-            clear_overprovisioned = (
-                instances > min_instances
-                and cpu_usage < 0.5
-                and max_downstream < self.sys_slo_s
-                and steady
-            )
+
 
             # --- Logging ---
             print(
@@ -178,36 +178,30 @@ class ServiceScaler:
                 f"INST={instances}"
             )
 
-            self.cooldown = max(0, self.cooldown - 1)
 
-            # --- Scaling decision ---
-            if self.cooldown == 0 or abs(rps_delta_pct) >= 0.1 or knee:
-                self.prev_elements["rps"] = local_inbound_rps
+            if capacity is not None and capacity > 0:
+                desired_replicas = (
+                    max(min_instances, math.ceil(local_inbound_rps / capacity))
+                    if fanout is None
+                    else max(min_instances, math.ceil(fanout * entrypoint_rps / capacity))
+                )
 
-                if capacity is not None and capacity > 0:
-                    desired_replicas = (
-                        max(min_instances, math.ceil(local_inbound_rps / capacity))
-                        if fanout is None
-                        else max(min_instances, math.ceil(fanout * entrypoint_rps / capacity))
-                    )
+                if (desired_replicas == instances) and clear_overprovisioned:
+                    desired_replicas = instances - 1
 
-                    scale_up = desired_replicas > instances and polished_total_lat > self.local_slo_s
-                    scale_down = desired_replicas < instances and clear_overprovisioned
-                    scale_condition = scale_up or scale_down
+                scale_up = desired_replicas > instances and polished_total_lat > self.local_slo_s
+                scale_down = desired_replicas < instances
+                scale_condition = scale_up or scale_down
 
-                    if scale_condition:
-                        print(f"[{self.service_name}] Scaling {instances} -> {desired_replicas} replicas")
-                        self.scale(desired_replicas)
-
-                        if desired_replicas > instances:
-                            self.cooldown = self.cooldown_period
-                        elif desired_replicas < instances:
-                            # Update prev_elements for knee detection
-                            self.prev_elements["polished_lat"] = polished_total_lat
-                            self.prev_elements["cpu"] = cpu_per_replica
-                            self.probing_scale_down = True
-
-                        instances = self.get_current_replicas()
+                if scale_condition:
+                    print(f"[{self.service_name}] Scaling {instances} -> {desired_replicas} replicas")
+                    self.scale(desired_replicas)
+                    if desired_replicas < instances:
+                        # Update prev_elements for knee detection
+                        self.prev_elements["polished_lat"] = polished_total_lat
+                        self.prev_elements["cpu"] = cpu_per_replica
+                        self.probing_scale_down = True
+                    instances = self.get_current_replicas()
 
             time.sleep(self.poll_interval)
 
