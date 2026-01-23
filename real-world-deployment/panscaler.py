@@ -38,7 +38,7 @@ class ServiceScaler:
         self.deployment_name = self.service_name
 
         # Previous metrics for knee detection
-        self.prev_elements = {"polished_lat": 0, "cpu": 0, "rps": 0}
+        self.prev_elements = {"polished_lat": 0, "cpu": 0, "rps": 0, instances: 0}
         self.EPS_LAT = 0.10  # 10% latency inflation
         self.EPS_CPU = 0.05  # 5% CPU growth ceiling
         self.probing_scale_down = False
@@ -49,7 +49,8 @@ class ServiceScaler:
             return False, None, None
         r_T = polished_lat / prev["polished_lat"]
         r_CPU = cpu_per_replica / prev["cpu"]
-        knee = (r_T >= 1.0 + self.EPS_LAT) and (1 <= r_CPU <= 1.0 + self.EPS_CPU)
+        r_CPU_norm = r_CPU / (prev["instances"] / instances)
+        knee = (r_T >= 1 + EPS_LAT) and (abs(r_CPU_norm - 1) <= EPS_CPU)
         return knee, r_T, r_CPU
 
     def query_prometheus(self, query: str, aggregate="sum") -> float:
@@ -100,7 +101,7 @@ class ServiceScaler:
         min_instances = self.get_current_replicas()
         instances = min_instances
         capacity, fanout = None, None
-
+        self.prev_elements["instances"] = instances
         while True:
             # --- Collect metrics ---
             (
@@ -131,7 +132,7 @@ class ServiceScaler:
                 and abs(rps_delta_pct) < 0.1
             )
 
-            clear_overprovisioned = (
+            safe_removal = (
                 instances > min_instances
                 and cpu_usage < 0.5
                 and max_downstream < self.sys_slo_s
@@ -181,13 +182,16 @@ class ServiceScaler:
 
             if capacity is not None and capacity > 0:
                 desired_replicas = (
-                    max(min_instances, math.ceil(local_inbound_rps / capacity))
+                    max(min_instances, math.ceil(local_inbound_rps * self.margin / capacity))
                     if fanout is None
-                    else max(min_instances, math.ceil(fanout * entrypoint_rps / capacity))
+                    else max(min_instances, math.ceil(fanout * entrypoint_rps * self.margin / capacity))
                 )
 
-                if (desired_replicas == instances) and clear_overprovisioned:
+                if (desired_replicas == instances) and safe_removal:
                     desired_replicas = instances - 1
+                    self.prev_elements["polished_lat"] = polished_total_lat
+                    self.prev_elements["cpu"] = cpu_per_replica
+                    self.probing_scale_down = True
 
                 scale_up = desired_replicas > instances and polished_total_lat > self.local_slo_s
                 scale_down = desired_replicas < instances
@@ -196,12 +200,8 @@ class ServiceScaler:
                 if scale_condition:
                     print(f"[{self.service_name}] Scaling {instances} -> {desired_replicas} replicas")
                     self.scale(desired_replicas)
-                    if desired_replicas < instances:
-                        # Update prev_elements for knee detection
-                        self.prev_elements["polished_lat"] = polished_total_lat
-                        self.prev_elements["cpu"] = cpu_per_replica
-                        self.probing_scale_down = True
                     instances = self.get_current_replicas()
+                    self.prev_elements["instances"] = instances
 
             time.sleep(self.poll_interval)
 
