@@ -38,7 +38,7 @@ class ServiceScaler:
         self.deployment_name = self.service_name
 
         # Previous metrics for knee detection
-        self.prev_elements = {"polished_lat": 0, "cpu": 0, "rps": 0, instances: 0}
+        self.prev_elements = {"polished_lat": 0, "cpu": 0, "rps": 0, "instances": 0}
         self.EPS_LAT = 0.10  # 10% latency inflation
         self.EPS_CPU = 0.05  # 5% CPU growth ceiling
         self.probing_scale_down = False
