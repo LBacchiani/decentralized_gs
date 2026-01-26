@@ -88,7 +88,7 @@ successful_requests_query = f"""
         rate(istio_requests_total{{
             destination_workload="{SERVICE_NAME}",
             reporter="destination",
-            response_code!~"2.."
+            response_code=~"2.."
         }}[{POLL_INTERVAL}s])
     )
 """
