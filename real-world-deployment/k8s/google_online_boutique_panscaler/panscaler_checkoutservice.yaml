@@ -31,12 +31,10 @@ spec:
               value: "45"
             - name: MIN_INSTANCES
               value: "1"
-            - name: THROUGHPUT_EPSILON
-              value: "0.02"
             - name: SYS_THRESHOLD_MS
               value: "1500"
-            - name: LATENCY_THRESHOLD_MS
-              value: "1500"
+            - name: CPU_SLO
+              value: "0.6"
             - name: PLATEAU_WINDOWS
               value: "2"
           resources:
