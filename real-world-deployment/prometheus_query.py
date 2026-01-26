@@ -1,3 +1,4 @@
+import os
 POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", 45))
 SERVICE_NAME = os.getenv("SERVICE_NAME")
 if not SERVICE_NAME:
@@ -30,7 +31,7 @@ max(
         sum by (destination_workload) (
             rate(istio_request_duration_milliseconds_sum{{
                 source_workload="{SERVICE_NAME}",
-                reporter="source"
+                reporter="destination"
             }}[{POLL_INTERVAL}s])
         )
     )
@@ -39,7 +40,7 @@ max(
         sum by (destination_workload) (
             rate(istio_request_duration_milliseconds_count{{
                 source_workload="{SERVICE_NAME}",
-                reporter="source"
+                reporter="destination"
             }}[{POLL_INTERVAL}s])
         )
     )
@@ -86,8 +87,8 @@ successful_requests_query = f"""
     sum(
         rate(istio_requests_total{{
             destination_workload="{SERVICE_NAME}",
-            reporter="source",
-            response_code!~"5.."
+            reporter="destination",
+            response_code!~"2.."
         }}[{POLL_INTERVAL}s])
     )
 """
@@ -95,3 +96,13 @@ successful_requests_query = f"""
 cpu_period_query = f"""avg(container_spec_cpu_period{{pod=~"{SERVICE_NAME}.*", pod!~"{SERVICE_NAME}-autoscaler.*"}})"""
 cpu_spec_total_quota_query = f"""avg(container_spec_cpu_quota{{pod=~"{SERVICE_NAME}.*", pod!~"{SERVICE_NAME}-autoscaler.*", container=""}})"""
 cpu_spec_istio_quota_query = f"""avg(container_spec_cpu_quota{{pod=~"{SERVICE_NAME}.*", pod!~"{SERVICE_NAME}-autoscaler.*", container="istio-proxy"}})"""
+
+p99_query = f'''
+        histogram_quantile(
+          0.99,
+          sum(rate(istio_request_duration_milliseconds_bucket{{
+            destination_app="{SERVICE_NAME}",
+            reporter="destination"
+          }}[{POLL_INTERVAL}])) by (le)
+        ) / 1000
+'''

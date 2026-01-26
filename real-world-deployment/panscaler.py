@@ -43,14 +43,14 @@ class ServiceScaler:
         self.EPS_CPU = 0.05  # 5% CPU growth ceiling
         self.probing_scale_down = False
 
-    def is_at_knee(self, polished_lat, cpu_per_replica):
+    def is_at_knee(self, polished_lat, cpu_per_replica, instances):
         prev = self.prev_elements
         if prev["polished_lat"] <= 0 or prev["cpu"] <= 0.01:
             return False, None, None
         r_T = polished_lat / prev["polished_lat"]
         r_CPU = cpu_per_replica / prev["cpu"]
         r_CPU_norm = r_CPU / (prev["instances"] / instances)
-        knee = (r_T >= 1 + EPS_LAT) and (abs(r_CPU_norm - 1) <= EPS_CPU)
+        knee = (r_T >= 1 + self.EPS_LAT) and (abs(r_CPU_norm - 1) <= self.EPS_CPU)
         return knee, r_T, r_CPU
 
     def query_prometheus(self, query: str, aggregate="sum") -> float:
@@ -79,6 +79,7 @@ class ServiceScaler:
         cpu_spec_total_quota = self.query_prometheus(cpu_spec_total_quota_query)
         cpu_spec_istio_quota = self.query_prometheus(cpu_spec_istio_quota_query)
         cpu_pod_quota = (cpu_spec_total_quota - cpu_spec_istio_quota) / cpu_period
+        p99 = self.query_prometheus(p99_query)
 
         polished_total_lat, max_downstream = 0, 0
         if latency_elements != 0:
@@ -95,6 +96,7 @@ class ServiceScaler:
             retried_requests,
             total_cpu,
             cpu_pod_quota,
+            p99
         )
 
     def run_loop(self):
@@ -102,6 +104,7 @@ class ServiceScaler:
         instances = min_instances
         capacity, fanout = None, None
         self.prev_elements["instances"] = instances
+        update_inst = False  
         while True:
             # --- Collect metrics ---
             (
@@ -113,6 +116,7 @@ class ServiceScaler:
                 retried_requests,
                 total_cpu,
                 cpu_pod_quota,
+                p99
             ) = self.get_metrics()
 
             cpu_per_replica = total_cpu / instances
@@ -129,7 +133,7 @@ class ServiceScaler:
             steady = (
                 successful_rate > 0.999
                 and retry_rate < 0.05
-                and abs(rps_delta_pct) < 0.1
+                and abs(rps_delta_pct) < 0.3
             )
 
             safe_removal = (
@@ -143,7 +147,7 @@ class ServiceScaler:
             knee, r_T, r_CPU = False, None, None
             if self.probing_scale_down:
                 if steady:
-                    knee, r_T, r_CPU = self.is_at_knee(polished_total_lat, cpu_per_replica)
+                    knee, r_T, r_CPU = self.is_at_knee(polished_total_lat, cpu_per_replica, instances)
                     # Disarm probe if knee found or cannot scale down
                     if knee or instances == min_instances:
                         self.probing_scale_down = False
@@ -151,7 +155,7 @@ class ServiceScaler:
                     self.probing_scale_down = False
 
             # --- Learn capacity and fanout ---
-            if polished_total_lat < self.local_slo_s and not knee:
+            if polished_total_lat < self.local_slo_s and not knee and local_inbound_rps > 0:
                 curr_capacity = local_inbound_rps / instances
                 self.capacity_history.append(curr_capacity)
                 capacity = self._compute_capacity()
@@ -168,14 +172,16 @@ class ServiceScaler:
                 f"[{self.service_name}] "
                 f"RPS_local={local_inbound_rps:.2f}, "
                 f"RPS_entry={entrypoint_rps:.2f}, "
-                f"C={capacity:.2f if capacity else 'N/A'}, "
-                f"Fout={fanout:.2f if fanout else 'N/A'}, "
+                f"C={capacity if capacity is not None else float('nan'):.2f}, "
+                f"Fout={fanout if fanout is not None else float('nan'):.2f}, "
                 f"E[S]={polished_total_lat:.2f}s, "
+                f"p99={p99:.2f}s, "
                 f"MAX(E[D])={max_downstream:.2f}s, "
                 f"CPU%={(cpu_usage*100):.2f}%, "
                 f"r_T={r_T if r_T is not None else float('nan'):.2f}, "
                 f"r_CPU={r_CPU if r_CPU is not None else float('nan'):.2f}, "
                 f"KNEE={knee}, "
+                f"SAFE REMOVAL={safe_removal}, "
                 f"INST={instances}"
             )
 
@@ -187,7 +193,7 @@ class ServiceScaler:
                     else max(min_instances, math.ceil(fanout * entrypoint_rps * self.margin / capacity))
                 )
 
-                if (desired_replicas == instances) and safe_removal:
+                if (desired_replicas >= instances) and safe_removal:
                     desired_replicas = instances - 1
                     self.prev_elements["polished_lat"] = polished_total_lat
                     self.prev_elements["cpu"] = cpu_per_replica
@@ -200,15 +206,16 @@ class ServiceScaler:
                 if scale_condition:
                     print(f"[{self.service_name}] Scaling {instances} -> {desired_replicas} replicas")
                     self.scale(desired_replicas)
-                    instances = self.get_current_replicas()
                     self.prev_elements["instances"] = instances
-
+                    update_inst = True
+                    
             time.sleep(self.poll_interval)
+            if update_inst:   
+                update_inst = False  
+                instances = self.get_current_replicas()
 
     def get_current_replicas(self) -> int:
-        dep = self.apps_api.read_namespaced_deployment(
-            name=self.deployment_name, namespace=self.namespace
-        )
+        dep = self.apps_api.read_namespaced_deployment(name=self.deployment_name, namespace=self.namespace)
         return dep.status.ready_replicas or dep.spec.replicas or 0
 
     def scale(self, replicas: int):

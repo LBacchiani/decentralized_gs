@@ -24,8 +24,8 @@ DEPLOYMENTS = os.getenv(
 
 FRONTEND_SERVICE = "frontend"
 
-WORKLOAD_DELTA_THRESHOLD = float(os.getenv("WORKLOAD_DELTA_THRESHOLD", "0.3"))
-WINDOW_SIZE = int(os.getenv("WINDOW_SIZE", "10"))
+WINDOW_SIZE = int(os.getenv("WINDOW_SIZE", "20"))
+LATENCY_SLO = float(os.getenv("LATENCY_SLO", "1.5"))  # seconds (p99)
 
 # ----------------------------
 # Logging
@@ -54,44 +54,40 @@ def scalar(query: str) -> float:
     return float(result[0]["value"][1])
 
 # ----------------------------
-# Online Boutique metrics
+# Metrics
 # ----------------------------
 def inbound_rps():
     return scalar(
         f'''
-        sum(
-          rate(istio_requests_total{{
+        sum(rate(istio_requests_total{{
             destination_app="{FRONTEND_SERVICE}",
             reporter="destination"
-          }}[1m])
-        )
+        }}[1m]))
         '''
     )
 
-def error_rate():
-    return scalar(
+def error_ratio():
+    errors = scalar(
         f'''
-        sum(
-          rate(istio_requests_total{{
+        sum(rate(istio_requests_total{{
             destination_app="{FRONTEND_SERVICE}",
             reporter="destination",
             response_code=~"5.."
-          }}[{POLL_INTERVAL}])
-        )
+        }}[1m]))
         '''
     )
+    total = inbound_rps()
+    return errors / total if total > 0 else 0.0
 
-def latency_quantile(q: float):
+def latency_p99():
     return scalar(
         f'''
         histogram_quantile(
-          {q},
-          sum(
-            rate(istio_request_duration_milliseconds_bucket{{
+          0.99,
+          sum(rate(istio_request_duration_milliseconds_bucket{{
             destination_app="{FRONTEND_SERVICE}",
-              reporter="destination"
-            }}[{POLL_INTERVAL}])
-          ) by (le)
+            reporter="destination"
+          }}[1m])) by (le)
         ) / 1000
         '''
     )
@@ -99,85 +95,74 @@ def latency_quantile(q: float):
 def total_replicas():
     return scalar(
         f'''
-        sum(
-          kube_deployment_status_replicas{{
+        sum(kube_deployment_status_replicas{{
             namespace="{NAMESPACE}",
             deployment=~"{DEPLOYMENTS}"
-          }}
-        )
+        }})
         '''
     )
 
 # ----------------------------
-# State tracking
+# State
 # ----------------------------
-rps_history = deque(maxlen=WINDOW_SIZE)
-replica_history = deque(maxlen=WINDOW_SIZE)
+replica_hist = deque(maxlen=WINDOW_SIZE)
+p99_hist = deque(maxlen=WINDOW_SIZE)
 
-pending_scale_event_ts = None
-scale_reaction_delays = []
-scaling_events = 0
+scale_events = 0
+oscillations = 0
+
+last_replica_delta = 0
+
+slo_recovery_start = None
+slo_recovery_times = []
+
+replica_seconds = 0.0
+sample_count = 0
 
 # ----------------------------
 # Main loop
 # ----------------------------
 def main():
-    global pending_scale_event_ts, scaling_events
+    global scale_events, oscillations, last_replica_delta
+    global slo_recovery_start, replica_seconds, sample_count
 
-    logging.info("Panscaler monitor started")
+    logging.info("Evaluation monitor started")
 
     while True:
-        now = time.time()
         ts = datetime.utcnow().isoformat()
 
         rps = inbound_rps()
         replicas = total_replicas()
+        p99 = latency_p99()
+        err = error_ratio()
 
-        rps_history.append(rps)
-        replica_history.append(replicas)
+        replica_hist.append(replicas)
+        p99_hist.append(p99)
 
-        # Detect workload spike
-        if len(rps_history) >= 2:
-            prev = rps_history[-2]
-            if prev > 0:
-                delta = (rps - prev) / prev
-                if delta > WORKLOAD_DELTA_THRESHOLD and pending_scale_event_ts is None:
-                    pending_scale_event_ts = now
-                    logging.info(f"Workload increase detected (Δ={delta:.2f})")
+        # ----------------------------
+        # Scaling dynamics
+        # ----------------------------
+        if len(replica_hist) >= 2:
+            delta = replica_hist[-1] - replica_hist[-2]
+            if delta != 0:
+                scale_events += 1
+                if last_replica_delta != 0 and delta * last_replica_delta < 0:
+                    oscillations += 1
+                last_replica_delta = delta
 
-        # Detect scaling event
-        if len(replica_history) >= 2:
-            if replica_history[-1] != replica_history[-2]:
-                scaling_events += 1
-                logging.info(
-                    f"Scaling event: replicas {replica_history[-2]} → {replica_history[-1]}"
-                )
+        # ----------------------------
+        # SLO analysis
+        # ----------------------------
 
-                if pending_scale_event_ts is not None:
-                    delay = now - pending_scale_event_ts
-                    scale_reaction_delays.append(delay)
-                    logging.info(f"Scale reaction delay = {delay:.2f}s")
-                    pending_scale_event_ts = None
-
-        # Stability metric
-        rep_var = variance(replica_history) if len(replica_history) > 1 else 0.0
-
-        # Performance metrics
-        p50 = latency_quantile(0.50)
-        p90 = latency_quantile(0.90)
-        p99 = latency_quantile(0.99)
-        err = error_rate()
-        throughput = max(rps - err, 0.0)
 
         logging.info(
             f"[{ts}] "
             f"RPS={rps:.2f} "
-            f"THR={throughput:.2f} "
-            f"ERR={err:.2f} "
-            f"p50={p50:.3f}s p90={p90:.3f}s p99={p99:.3f}s "
-            f"total_replicas={replicas} "
-            f"replica_var={rep_var:.2f} "
-            f"scale_events={scaling_events}"
+            f"ERR={err:.3f} "
+            f"p99={p99:.3f}s "
+            f"replicas={replicas:.1f} "
+            f"scale_events={scale_events} "
+            f"oscillations={oscillations} "
         )
 
         time.sleep(POLL_INTERVAL)
