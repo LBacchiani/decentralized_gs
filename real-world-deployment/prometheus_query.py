@@ -101,8 +101,9 @@ p99_query = f'''
         histogram_quantile(
           0.99,
           sum(rate(istio_request_duration_milliseconds_bucket{{
-            destination_app="{SERVICE_NAME}",
-            reporter="destination"
+            destination_workload="{SERVICE_NAME}",
+            reporter="destination",
+            response_code=~"2.."
           }}[{POLL_INTERVAL}])) by (le)
         ) / 1000
 '''
